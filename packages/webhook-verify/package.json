@@ -1,0 +1,21 @@
+{
+  "name": "@webhook-verify/core",
+  "version": "0.1.0",
+  "description": "Shared webhook verification: HMAC signatures, envelope parsing, timestamp validation",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./linear": "./dist/linear/index.js",
+    "./relay": "./dist/relay/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

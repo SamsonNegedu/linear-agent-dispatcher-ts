@@ -1,0 +1,13 @@
+{
+  "repositories": [
+    {
+      "label": "my-repo",
+      "path": "/absolute/path/to/my/repo",
+      "description": "My service repository",
+      "modes": {
+        "agent-implement": "linear-implement"
+      }
+    }
+  ],
+  "_comment": "modes: Maps Linear mode labels to Claude /skill names. Example: issue labeled 'agent-implement' invokes 'claude -p /linear-implement ISSUE-ID' in the repo path. Each skill must exist in the repo's .claude/settings.json"
+}

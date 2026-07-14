@@ -1,0 +1,18 @@
+{
+  "name": "@linear-agent/linear-client",
+  "version": "0.1.0",
+  "description": "Shared Linear GraphQL client for agent services",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

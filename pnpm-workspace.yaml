@@ -1,0 +1,9 @@
+packages:
+  - 'packages/*'
+  - 'services/*'
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - aws-crt
+  - aws-sdk
+  - esbuild

@@ -1,0 +1,38 @@
+{
+  "name": "@relay/service",
+  "version": "0.1.0",
+  "description": "Serverless webhook relay: receives from Linear, fans out to subscribers via HTTP",
+  "main": "dist/services/relay-service/src/main.js",
+  "scripts": {
+    "dev": "tsc && node dist/services/relay-service/src/main.js",
+    "dev:watch": "nodemon --watch src --ext ts --exec 'pnpm dev'",
+    "build": "tsc",
+    "start": "node dist/services/relay-service/src/main.js",
+    "setup-local-dynamodb": "node scripts/setup-local-dynamodb.js",
+    "test": "jest"
+  },
+  "exports": {
+    ".": "./dist/services/relay-service/src/main.js"
+  },
+  "dependencies": {
+    "@linear-agent/linear-client": "workspace:*",
+    "@api-gateway/serverless-express": "workspace:*",
+    "@dynamodb/client": "workspace:*",
+    "@webhook-verify/core": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@codegenie/serverless-express": "^4.14.0",
+    "dotenv": "^16.4.0",
+    "uuid": "^10.0.0",
+    "reflect-metadata": "^0.2.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.140",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "nodemon": "^3.1.0",
+    "typescript": "^5.7.0"
+  }
+}
