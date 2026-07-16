@@ -14,15 +14,16 @@ dotenv.config({
   path: fs.existsSync(envLocalPath) ? envLocalPath : path.join(process.cwd(), '.env'),
 });
 
-import { Logger } from '@nestjs/common';
+import { Logger, INestApplication } from '@nestjs/common';
 import { bootstrapServer } from './bootstrap';
 import { loadConfig } from './config/config';
 
 const logger = new Logger('Bootstrap');
 
-async function main() {
+async function main(): Promise<void> {
   const config = loadConfig();
-  const { app } = await bootstrapServer();
+  const result: { app: INestApplication; port: number } = await bootstrapServer();
+  const app: INestApplication = result.app;
 
   // Handle process termination signals
   const shutdownGrace = config.executor.timeout ? Math.min(30000, config.executor.timeout) : 30000;

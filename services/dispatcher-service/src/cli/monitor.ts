@@ -1,5 +1,5 @@
 import { bootstrapServer } from '../bootstrap';
-import { Logger } from '@nestjs/common';
+import { Logger, INestApplication } from '@nestjs/common';
 
 const logger = new Logger('Monitor');
 
@@ -73,7 +73,7 @@ const renderQueueTab = (runs: Run[]): string => {
   } else {
     for (const run of runs) {
       lines.push(
-        `  ${run.domainLabel} | ${run.issueIdentifier}: ${run.issueTitle || '(no title)'} | ${run.skill}`
+        `  ${run.domainLabel} | ${run.issueIdentifier}: ${run.issueTitle || '(no title)'} | ${run.skill}`,
       );
     }
   }
@@ -113,8 +113,10 @@ const renderFailedTab = (runs: Run[]): string => {
   return lines.join('\n');
 };
 
-async function main() {
-  const { app, port } = await bootstrapServer();
+async function main(): Promise<void> {
+  const result = await bootstrapServer();
+  const app: INestApplication = result.app;
+  const port: number = result.port;
 
   logger.log(`Monitor TUI starting, server on port ${port}`);
 
@@ -172,30 +174,33 @@ async function main() {
   };
 
   await fetchAndRender();
-  const interval = setInterval(fetchAndRender, 1000);
+  const interval = setInterval(() => {
+    void fetchAndRender();
+  }, 1000);
+
+  const handleShutdown = async (): Promise<void> => {
+    clearInterval(interval);
+    logger.log('Shutting down...');
+    await app.close();
+    process.exit(0);
+  };
 
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(true);
     process.stdin.resume();
-    process.stdin.on('data', async (key) => {
+    process.stdin.on('data', (key) => {
       const char = key.toString();
       if (char === 'q' || char === 'Q') {
-        clearInterval(interval);
-        logger.log('Shutting down...');
-        await app.close();
-        process.exit(0);
-      }
-      if (char === '') {
+        void handleShutdown();
+      } else if (char === '') {
         // Ctrl+C
-        clearInterval(interval);
-        logger.log('Shutting down...');
-        await app.close();
-        process.exit(0);
-      }
-      // Number keys 1-5 to switch tabs
-      const tabNum = parseInt(char, 10);
-      if (tabNum >= 1 && tabNum <= 5) {
-        currentTab = tabNum - 1;
+        void handleShutdown();
+      } else {
+        // Number keys 1-5 to switch tabs
+        const tabNum = parseInt(char, 10);
+        if (tabNum >= 1 && tabNum <= 5) {
+          currentTab = tabNum - 1;
+        }
       }
     });
   }

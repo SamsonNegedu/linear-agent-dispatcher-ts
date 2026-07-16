@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { INestApplication } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import {
@@ -13,14 +14,14 @@ import { loadConfig } from './config/config';
 const logger = new Logger('Bootstrap');
 
 export interface BootstrapResult {
-  app: any;
+  app: INestApplication;
   port: number;
 }
 
-export async function bootstrapServer(): Promise<BootstrapResult> {
+export async function bootstrapServer(): Promise<{ app: INestApplication; port: number }> {
   const config = loadConfig();
 
-  const app = await NestFactory.create(AppModule, {
+  const app: INestApplication = await NestFactory.create(AppModule, {
     rawBody: true, // enable raw body parsing for webhook signature verification
     abortOnError: false,
   });
