@@ -160,7 +160,7 @@ async function main() {
       }
 
       console.clear();
-      console.log('┌─ DISPATCHER MONITOR (press q to exit, ← → to switch tabs) ─────────────────┐');
+      console.log('┌─ DISPATCHER MONITOR (1-5 to switch tabs, q to exit) ──────────────────────┐');
       console.log(`│ ${tabDisplay}`);
       console.log('├────────────────────────────────────────────────────────────────────────────┤');
       console.log(content);
@@ -192,21 +192,10 @@ async function main() {
         await app.close();
         process.exit(0);
       }
-      if (char === '\x1b') {
-        // Arrow key escape sequence
-        process.stdin.once('data', (nextKey) => {
-          if (nextKey.toString() === '[') {
-            process.stdin.once('data', (arrowKey) => {
-              if (arrowKey.toString() === 'C') {
-                // Right arrow
-                currentTab = (currentTab + 1) % tabs.length;
-              } else if (arrowKey.toString() === 'D') {
-                // Left arrow
-                currentTab = (currentTab - 1 + tabs.length) % tabs.length;
-              }
-            });
-          }
-        });
+      // Number keys 1-5 to switch tabs
+      const tabNum = parseInt(char, 10);
+      if (tabNum >= 1 && tabNum <= 5) {
+        currentTab = tabNum - 1;
       }
     });
   }
