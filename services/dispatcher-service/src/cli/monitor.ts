@@ -162,7 +162,7 @@ async function main(): Promise<void> {
       }
 
       console.clear();
-      console.log('┌─ DISPATCHER MONITOR (1-5 to switch tabs, q to exit) ──────────────────────┐');
+      console.log('┌─ DISPATCHER MONITOR (1-5 to switch tabs, q or Ctrl+C to exit) ────────────┐');
       console.log(`│ ${tabDisplay}`);
       console.log('├────────────────────────────────────────────────────────────────────────────┤');
       console.log(content);
@@ -188,12 +188,12 @@ async function main(): Promise<void> {
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(true);
     process.stdin.resume();
-    process.stdin.on('data', (key) => {
+    process.stdin.on('data', (key: Buffer) => {
       const char = key.toString();
-      if (char === 'q' || char === 'Q') {
-        void handleShutdown();
-      } else if (char === '') {
-        // Ctrl+C
+      const firstByte = key[0];
+
+      // Handle Ctrl+C (byte 3) and Ctrl+Z (byte 26)
+      if (firstByte === 3 || firstByte === 26 || char === 'q' || char === 'Q') {
         void handleShutdown();
       } else {
         // Number keys 1-5 to switch tabs
@@ -204,6 +204,15 @@ async function main(): Promise<void> {
       }
     });
   }
+
+  // Also handle standard signals for redundancy
+  process.on('SIGINT', () => {
+    void handleShutdown();
+  });
+
+  process.on('SIGTERM', () => {
+    void handleShutdown();
+  });
 }
 
 main().catch((err) => {
