@@ -43,17 +43,17 @@ export class WebhookService {
         );
       } else {
         try {
-          this.logger.log(`Fetching issue ${issueId} to resolve assignee for agent session webhook`);
+          this.logger.log(
+            `Fetching issue ${issueId} to resolve assignee for agent session webhook`,
+          );
           const issueInfo = await this.linearClient.fetchIssueAssignee(issueId);
           assigneeId = issueInfo.assigneeId;
           if (!teamKey) {
             teamKey = issueInfo.teamKey;
           }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          this.logger.warn(
-            `Failed to fetch issue ${issueId} for agent session: ${errorMsg}`,
-          );
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          this.logger.warn(`Failed to fetch issue ${issueId} for agent session: ${errorMsg}`);
         }
       }
     }
@@ -169,15 +169,15 @@ export class WebhookService {
       }
 
       // Mark subscriber as recently active (for stale cleanup)
-      await this.subscriberService.markWebhookDelivered(subscriberId).catch((err) => {
-        const errorMsg = err instanceof Error ? err.message : String(err);
+      await this.subscriberService.markWebhookDelivered(subscriberId).catch((error) => {
+        const errorMsg = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Failed to mark webhook delivered for ${subscriberId}: ${errorMsg}`);
       });
 
       return { subscriberId, endpoint, success: true };
-    } catch (err) {
+    } catch (error) {
       const responseTime = Date.now() - startTime;
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       const status = errorMsg.includes('timeout') ? ('timeout' as const) : ('unreachable' as const);
 
       await this.deliveryService

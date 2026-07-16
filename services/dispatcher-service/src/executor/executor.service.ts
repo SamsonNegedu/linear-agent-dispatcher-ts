@@ -49,20 +49,12 @@ export class ExecutorService {
         resumeSessionId: run.claudeSessionId,
       });
 
-      const executionResult: ExecutionResult = {
-        runId,
-        status: result.status,
-        exitCode: result.exitCode,
-        errorSnippet: result.errorSnippet,
-        claudeSessionId: result.sessionId,
-      };
-
       // Mark complete
       await this.store.completeRun(runId, {
         status: result.status,
         exitCode: result.exitCode,
         errorSnippet: result.errorSnippet,
-        claudeSessionId: result.claudeSessionId,
+        claudeSessionId: result.sessionId,
       });
 
       if (result.status === 'succeeded') {
@@ -86,8 +78,8 @@ export class ExecutorService {
           );
         }
       }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Run failed: ${runId} - ${errorMsg}`);
       await this.store.completeRun(runId, {
         status: 'failed',
@@ -96,123 +88,8 @@ export class ExecutorService {
 
       // Post error activity
       if (run.providerSessionId) {
-        await this.activityNotifier.postError(run.providerSessionId, (err as Error).message);
+        await this.activityNotifier.postError(run.providerSessionId, (error as Error).message);
       }
     }
-  }
-
-  private async spawnClaudeHandler(
-    skill: string,
-    runId: string,
-    event: VerifiedEvent,
-    repoPath: string,
-    previousSessionId?: string,
-  ): Promise<ExecutionResult> {
-    return new Promise((resolve, reject) => {
-      // claude reads available skills from .claude/settings.json in the repo
-      const prompt = `/${skill} ${event.issueIdentifier}`;
-
-      const args = ['-p'];
-
-      // Add resume flag if available from previous session
-      if (previousSessionId) {
-        args.push('--resume', previousSessionId);
-      }
-
-      // Add prompt
-      args.push(prompt);
-
-      // Add output format for JSON parsing
-      args.push('--output-format', 'json');
-
-      const env = this.buildSafeEnv();
-
-      const child = spawn(this.config.executor.claudeBinPath, args, {
-        cwd: repoPath,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env,
-        timeout: this.config.executor.timeout || 30 * 60 * 1000,
-      });
-
-      let stdout = '';
-      let stderr = '';
-      let timeoutHandle: NodeJS.Timeout | null = null;
-
-      child.stdout?.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      child.stderr?.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      child.on('error', (err) => {
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-        reject(err);
-      });
-
-      child.on('close', (code) => {
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-
-        let sessionId: string | undefined;
-        let errorSnippet: string | undefined;
-
-        // Parse JSON output
-        if (stdout) {
-          try {
-            const output = JSON.parse(stdout) as ClaudeOutput;
-            sessionId = output.sessionId;
-            errorSnippet = output.error;
-          } catch {
-            // Not valid JSON, use stderr
-          }
-        }
-
-        if (!errorSnippet && stderr) {
-          errorSnippet = stderr.slice(-500); // Last 500 chars
-        }
-
-        if (code === 0) {
-          resolve({
-            runId,
-            status: 'succeeded',
-            exitCode: code ?? undefined,
-            claudeSessionId: sessionId,
-          });
-        } else {
-          resolve({
-            runId,
-            status: 'failed',
-            exitCode: code ?? undefined,
-            errorSnippet: errorSnippet || `Process exited with code ${code} and produced no output`,
-            claudeSessionId: sessionId,
-          });
-        }
-      });
-
-      // Enforce timeout by killing process group
-      if (this.config.executor.timeout) {
-        timeoutHandle = setTimeout(() => {
-          if (child.pid) {
-            process.kill(-child.pid, 'SIGTERM'); // Kill process group
-          }
-        }, this.config.executor.timeout);
-      }
-    });
-  }
-
-  private buildSafeEnv(): NodeJS.ProcessEnv {
-    const allowed = this.config.executor.allowedEnvVars;
-    const env: NodeJS.ProcessEnv = {};
-
-    // Only pass whitelisted environment variables to subprocess
-    for (const key of allowed) {
-      const value = process.env[key];
-      if (value !== undefined) {
-        env[key] = value;
-      }
-    }
-
-    return env;
   }
 }

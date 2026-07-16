@@ -67,10 +67,10 @@ export class OAuthService {
     const callbackUrl = `${baseUrl}/callback`;
     try {
       return await this.oauthClient.exchangeCodeForToken(code, callbackUrl);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`OAuth token exchange failed: ${errorMsg}`);
-      throw err;
+      throw error;
     }
   }
 

@@ -94,8 +94,8 @@ export class IssueCommentService {
     try {
       const result = await this.linearClient.createComment(issueId, body);
       this.logger.log(`${logTag} Comment posted: ${result.id} (issue=${issueId})`);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`${logTag} Failed to post comment: ${errorMsg} (issue=${issueId})`);
     }
   }

@@ -64,41 +64,52 @@ export class DispatcherService {
 
       // Post acknowledgment to Linear session if available
       if (event.sessionId) {
-        await this.activityNotifier.postStart(event.sessionId, event.issueIdentifier, repoLabel, skill, run.id);
+        await this.activityNotifier.postStart(
+          event.sessionId,
+          event.issueIdentifier,
+          repoLabel,
+          skill,
+          run.id,
+        );
       }
 
       // Spawn handler (fire-and-forget)
-      this.executorService.executeRun(run.id, event).catch((err) => {
-        this.logger.error(`Executor error for run ${run.id}:`, err);
+      this.executorService.executeRun(run.id, event).catch((error) => {
+        this.logger.error(`Executor error for run ${run.id}:`, error);
       });
-    } catch (err) {
+    } catch (error) {
       // Skip elicitation feedback for duplicate payloads (already processed)
-      if (err instanceof DuplicatePayloadError) {
-        throw err;
+      if (error instanceof DuplicatePayloadError) {
+        throw error;
       }
 
       // Distinguish between expected validation failures and unexpected bugs
-      if (err instanceof ValidationError) {
+      if (error instanceof ValidationError) {
         // Expected failure: user needs to fix labels/config
         // Already posting comment/activity below; log at INFO level with clear marker
-        this.logger.log(`[ACTION_POSTED] Label validation failed for ${event.issueIdentifier}: ${err.message}`);
+        this.logger.log(
+          `[ACTION_POSTED] Label validation failed for ${event.issueIdentifier}: ${error.message}`,
+        );
       } else {
         // Unexpected failure: something is broken on the server
-        this.logger.error(`[NEEDS_ATTENTION] Unexpected error dispatching ${event.webhookId}:`, err);
+        this.logger.error(
+          `[NEEDS_ATTENTION] Unexpected error dispatching ${event.webhookId}:`,
+          error,
+        );
       }
 
       // Route error notification based on webhook type:
       // - Agent sessions: post activity (rich, structured feedback in session timeline)
       // - Issue webhooks: post comment (plain feedback on issue thread)
-      if (err instanceof Error) {
+      if (error instanceof Error) {
         if (event.sessionId) {
-          await this.activityNotifier.postElicitation(event.sessionId, err.message);
+          await this.activityNotifier.postElicitation(event.sessionId, error.message);
         } else if (event.issueId) {
-          await this.issueComments.postRequired(event.issueId, err.message);
+          await this.issueComments.postRequired(event.issueId, error.message);
         }
       }
 
-      throw err;
+      throw error;
     }
   }
 }

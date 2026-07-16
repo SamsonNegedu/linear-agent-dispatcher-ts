@@ -94,8 +94,8 @@ function saveDispatcherUrl(dispatcherUrl: string): void {
     }
 
     fs.writeFileSync(envPath, updated);
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`⚠️  Failed to persist RELAY_DISPATCHER_URL to .env.local: ${errorMsg}`);
   }
 }
@@ -141,8 +141,8 @@ async function updateRelay(config: UpdateConfig): Promise<void> {
     console.log(`  Message: ${String(result.message)}\n`);
 
     saveDispatcherUrl(config.localEndpoint);
-  } catch (err) {
-    console.error('❌ Connection error:', err instanceof Error ? err.message : err);
+  } catch (error) {
+    console.error('❌ Connection error:', error instanceof Error ? error.message : error);
     console.error('Make sure the relay service is running and accessible at:', config.relayUrl);
     process.exit(1);
   }
@@ -152,8 +152,8 @@ async function main(): Promise<void> {
   try {
     const config = parseArgs();
     await updateRelay(config);
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('❌ Error:', errorMsg);
     process.exit(1);
   }

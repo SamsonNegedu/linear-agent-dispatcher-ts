@@ -54,9 +54,12 @@ export class RelayWebhookController {
         );
         throw new HttpException('Invalid signature', HttpStatus.UNAUTHORIZED);
       }
-    } catch (err) {
-      if (err instanceof HttpException) throw err;
-      this.logger.error(`[CHECK_RELAY_CONFIG] Signature verification error for webhook ${payload?.webhookId}:`, err);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error(
+        `[CHECK_RELAY_CONFIG] Signature verification error for webhook ${payload?.webhookId}:`,
+        error,
+      );
       throw new HttpException('Verification failed', HttpStatus.BAD_REQUEST);
     }
 

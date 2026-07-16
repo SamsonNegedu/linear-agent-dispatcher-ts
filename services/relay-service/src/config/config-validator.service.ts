@@ -59,7 +59,7 @@ export class ConfigValidatorService implements OnModuleInit {
       // logger.error() lines below never reach the console. Include the actual
       // messages in the thrown error itself so they aren't lost.
       this.logger.error('Configuration validation failed:');
-      errors.forEach((err) => this.logger.error(`  [ERROR] ${err}`));
+      errors.forEach((error) => this.logger.error(`  [ERROR] ${error}`));
       throw new Error(
         `Configuration validation failed:\n${errors.map((e) => `  - ${e}`).join('\n')}`,
       );

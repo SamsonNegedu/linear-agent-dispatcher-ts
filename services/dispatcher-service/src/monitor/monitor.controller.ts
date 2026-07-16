@@ -54,7 +54,9 @@ export class MonitorController {
           repoPath: repo.path,
           domainLabel: repo.label,
           description: repo.description,
-          modes: repo.modes ? Object.entries(repo.modes).map(([label, skill]) => ({ label, skill })) : [],
+          modes: repo.modes
+            ? Object.entries(repo.modes).map(([label, skill]) => ({ label, skill }))
+            : [],
           runningCount: 0,
           currentRuns: [],
         });
@@ -82,10 +84,10 @@ export class MonitorController {
         },
         repos: Array.from(repoMap.values()),
       };
-    } catch (err) {
-      this.logger.error('Summary request failed:', err);
+    } catch (error) {
+      this.logger.error('Summary request failed:', error);
       throw new HttpException(
-        { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' },
+        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -102,10 +104,7 @@ export class MonitorController {
       const validStatuses: Run['status'][] = ['running', 'pending', 'succeeded', 'failed'];
 
       if (status && !validStatuses.includes(status)) {
-        throw new HttpException(
-          { error: 'Invalid status parameter' },
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new HttpException({ error: 'Invalid status parameter' }, HttpStatus.BAD_REQUEST);
       }
 
       if (!status) {
@@ -113,11 +112,11 @@ export class MonitorController {
       }
 
       return await this.store.listRunsByStatus(status, limit);
-    } catch (err) {
-      if (err instanceof HttpException) throw err;
-      this.logger.error('Runs request failed:', err);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error('Runs request failed:', error);
       throw new HttpException(
-        { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' },
+        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

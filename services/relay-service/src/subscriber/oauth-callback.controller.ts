@@ -42,8 +42,8 @@ export class OAuthCallbackController {
       cliCallbackUrl = stateData.cliCallbackUrl;
       relayBaseUrl = stateData.relayBaseUrl;
       new URL(localEndpoint); // Validate it's a valid URL
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.warn(`State validation failed: ${errorMsg}`);
       throw new HttpException('Invalid or expired state parameter', HttpStatus.BAD_REQUEST);
     }
@@ -99,11 +99,11 @@ export class OAuthCallbackController {
       }
 
       res.json(result);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`OAuth callback error: ${errorMsg}`);
-      if (err instanceof HttpException) {
-        throw err;
+      if (error instanceof HttpException) {
+        throw error;
       }
       throw new HttpException('OAuth callback failed', HttpStatus.INTERNAL_SERVER_ERROR);
     }

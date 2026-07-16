@@ -81,8 +81,8 @@ export class PreflightService implements OnModuleInit {
     // 4. Report
     if (errors.length > 0) {
       this.logger.error('Preflight validation failed:');
-      for (const err of errors) {
-        this.logger.error(`  [ERROR] ${err}`);
+      for (const error of errors) {
+        this.logger.error(`  [ERROR] ${error}`);
       }
       throw new Error('Preflight validation failed');
     }

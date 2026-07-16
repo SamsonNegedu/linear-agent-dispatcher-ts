@@ -64,3 +64,5 @@ coverage/
 
 # Personal configs
 repos.config.json
+
+*.db

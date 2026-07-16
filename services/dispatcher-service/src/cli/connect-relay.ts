@@ -43,7 +43,12 @@ export async function connectRelay(opts: ConnectRelayOptions): Promise<void> {
   step3_openBrowser(authUrl);
   const callbackData = await step4_waitForCallback(server, config);
   const firstSubscriberId = callbackData.teams[0]?.subscriberId;
-  step5_saveCredentials(callbackData.secret!, config.relayUrl, config.localEndpoint, firstSubscriberId);
+  step5_saveCredentials(
+    callbackData.secret!,
+    config.relayUrl,
+    config.localEndpoint,
+    firstSubscriberId,
+  );
   step6_printSuccess(callbackData.teams, config, callbackData.secret!);
 }
 
@@ -82,16 +87,14 @@ async function step1_requestAuthUrl(config: Config): Promise<string> {
       cliCallback: config.callbackUrl,
       relayUrl: config.relayUrl,
     });
-    const response = await fetch(
-      `${config.relayUrl}/subscribers/auth/start?${params}`,
-    );
+    const response = await fetch(`${config.relayUrl}/subscribers/auth/start?${params}`);
     if (!response.ok) {
       throw new Error(`Relay responded with ${response.status}`);
     }
     const data = (await response.json()) as { redirect: string };
     return data.redirect;
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('❌ Failed to get authorization URL from relay');
     console.error(`   Error: ${errorMsg}`);
     process.exit(1);
@@ -99,9 +102,7 @@ async function step1_requestAuthUrl(config: Config): Promise<string> {
 }
 
 function step2_startCallbackServer(config: Config): Server {
-  console.log(
-    `2️⃣  Starting callback server on http://localhost:${config.callbackPort}\n`,
-  );
+  console.log(`2️⃣  Starting callback server on http://localhost:${config.callbackPort}\n`);
 
   const server = createServer((req, res) => {
     handleCallbackRequest(req, res, config.callbackPort, () => {});
@@ -163,10 +164,7 @@ function step3_openBrowser(authUrl: string): void {
   });
 }
 
-async function step4_waitForCallback(
-  server: Server,
-  config: Config,
-): Promise<CallbackData> {
+async function step4_waitForCallback(server: Server, config: Config): Promise<CallbackData> {
   console.log('4️⃣  Waiting for authorization callback...');
   console.log('    (authorize on Linear, then return here)\n');
 
@@ -227,9 +225,7 @@ function step5_saveCredentials(
   console.log('5️⃣  Saving credentials to .env\n');
 
   try {
-    const existing = fs.existsSync(ENV_PATH)
-      ? fs.readFileSync(ENV_PATH, 'utf-8')
-      : '';
+    const existing = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, 'utf-8') : '';
     let updated = upsertEnvVar(existing, 'RELAY_ENABLED', 'true');
     updated = upsertEnvVar(updated, 'RELAY_SUBSCRIBER_SECRET', secret);
     updated = upsertEnvVar(updated, 'RELAY_URL', relayUrl);
@@ -238,8 +234,8 @@ function step5_saveCredentials(
       updated = upsertEnvVar(updated, 'RELAY_SUBSCRIBER_ID', subscriberId);
     }
     fs.writeFileSync(ENV_PATH, updated);
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('⚠️  Failed to write .env.local');
     console.error(`   Error: ${errorMsg}`);
     console.log(
@@ -334,8 +330,8 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  connectRelay({ relayUrl, localEndpoint, port }).catch((err) => {
-    console.error('❌ Fatal error:', err);
+  connectRelay({ relayUrl, localEndpoint, port }).catch((error) => {
+    console.error('❌ Fatal error:', error);
     process.exit(1);
   });
 }

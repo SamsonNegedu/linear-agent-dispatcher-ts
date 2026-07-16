@@ -104,11 +104,11 @@ export class ReposConfigService {
       this.validateReposConfig(config);
       this.logger.log(`Loaded ${config.repositories.length} repositories from repos.config.json`);
       return config;
-    } catch (err) {
-      if (err instanceof SyntaxError) {
-        throw new Error(`Invalid JSON in repos.config.json: ${err.message}`);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(`Invalid JSON in repos.config.json: ${error.message}`);
       }
-      throw err;
+      throw error;
     }
   }
 

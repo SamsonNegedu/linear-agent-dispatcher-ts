@@ -68,10 +68,17 @@ export class SubscriberController {
     }
 
     if (relayUrl && !this.isValidRelayUrl(relayUrl)) {
-      throw new HttpException('Invalid relayUrl: must be HTTPS or http://localhost', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Invalid relayUrl: must be HTTPS or http://localhost',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    const authUrl = this.oauthService.generateAuthorizationUrl(localEndpoint, cliCallback, relayUrl);
+    const authUrl = this.oauthService.generateAuthorizationUrl(
+      localEndpoint,
+      cliCallback,
+      relayUrl,
+    );
     return { redirect: authUrl };
   }
 
@@ -87,7 +94,9 @@ export class SubscriberController {
   private isValidRelayUrl(urlString: string): boolean {
     try {
       const url = new URL(urlString);
-      return url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost');
+      return (
+        url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost')
+      );
     } catch {
       return false;
     }
@@ -136,8 +145,8 @@ export class SubscriberController {
         teamKey,
         message: 'Subscription registered. Store RELAY_SUBSCRIBER_SECRET in your .env',
       };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Error registering subscriber: ${errorMsg}`);
       throw new HttpException('Failed to register subscriber', HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -172,9 +181,15 @@ export class SubscriberController {
 
       // Prefer ID lookup (no scan needed) over secret lookup
       if (subscriberId) {
-        updated = await this.subscriberService.updateSubscriberEndpointById(subscriberId, localEndpoint);
+        updated = await this.subscriberService.updateSubscriberEndpointById(
+          subscriberId,
+          localEndpoint,
+        );
       } else {
-        updated = await this.subscriberService.updateSubscriberEndpoint(subscriberSecret!, localEndpoint);
+        updated = await this.subscriberService.updateSubscriberEndpoint(
+          subscriberSecret!,
+          localEndpoint,
+        );
       }
 
       if (!updated) {
@@ -195,9 +210,9 @@ export class SubscriberController {
         localEndpoint: updated.localEndpoint,
         message: 'Subscription endpoint updated successfully',
       };
-    } catch (err) {
-      if (err instanceof HttpException) throw err;
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Error updating subscriber: ${errorMsg}`);
       throw new HttpException('Failed to update subscription', HttpStatus.INTERNAL_SERVER_ERROR);
     }

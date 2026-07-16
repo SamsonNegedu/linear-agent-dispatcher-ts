@@ -90,7 +90,7 @@ async function main() {
   console.log('Done.');
 }
 
-main().catch((err) => {
-  console.error('Failed to set up local DynamoDB table:', err);
+main().catch((error) => {
+  console.error('Failed to set up local DynamoDB table:', error);
   process.exitCode = 1;
 });

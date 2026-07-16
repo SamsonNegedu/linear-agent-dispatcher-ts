@@ -36,7 +36,9 @@ function parseArgs(): CLIArgs {
   }
 
   if (!args.issueId || !args.label) {
-    console.error('Usage: test-webhook --issue-id=<ID> --label=<LABEL> [--team-key=<KEY>] [--port=<PORT>] [--endpoint=<URL>]');
+    console.error(
+      'Usage: test-webhook --issue-id=<ID> --label=<LABEL> [--team-key=<KEY>] [--port=<PORT>] [--endpoint=<URL>]',
+    );
     console.error('');
     console.error('Examples:');
     console.error('  pnpm test-webhook -- --issue-id=LIN-123 --label=agent-implement');
@@ -50,7 +52,9 @@ function parseArgs(): CLIArgs {
 function loadConfig() {
   const envPath = path.join(process.cwd(), '.env.local');
   if (!fs.existsSync(envPath)) {
-    console.error('.env.local not found. Make sure you are in services/dispatcher-service directory.');
+    console.error(
+      '.env.local not found. Make sure you are in services/dispatcher-service directory.',
+    );
     process.exit(1);
   }
 
@@ -64,7 +68,9 @@ function loadConfig() {
 
   const secret = env['RELAY_SUBSCRIBER_SECRET'];
   if (!secret) {
-    console.error('RELAY_SUBSCRIBER_SECRET not found in .env.local. Run "pnpm connect-relay" first.');
+    console.error(
+      'RELAY_SUBSCRIBER_SECRET not found in .env.local. Run "pnpm connect-relay" first.',
+    );
     process.exit(1);
   }
 
@@ -99,7 +105,10 @@ function createVerifiedEvent(args: CLIArgs): VerifiedEvent {
   };
 }
 
-async function sendWebhook(event: VerifiedEvent, config: ReturnType<typeof loadConfig>): Promise<void> {
+async function sendWebhook(
+  event: VerifiedEvent,
+  config: ReturnType<typeof loadConfig>,
+): Promise<void> {
   const payload = JSON.stringify(event);
   const signature = signWebhookPayload(payload, config.secret);
   const url = new URL(`${config.endpoint}:${config.port}/webhooks/relay`);
@@ -129,7 +138,9 @@ async function sendWebhook(event: VerifiedEvent, config: ReturnType<typeof loadC
           console.log('');
           console.log('Watch logs:');
           console.log('  1. Check dispatcher logs (pnpm dev:watch): look for "Received webhook"');
-          console.log('  2. Check database: sqlite3 ./data/dispatcher.db "SELECT * FROM issue_runs ORDER BY startedAt DESC LIMIT 1;"');
+          console.log(
+            '  2. Check database: sqlite3 ./data/dispatcher.db "SELECT * FROM issue_runs ORDER BY startedAt DESC LIMIT 1;"',
+          );
           resolve();
         } else {
           reject(new Error(`HTTP ${res.statusCode}: ${data}`));
@@ -149,10 +160,12 @@ async function main() {
     const config = loadConfig();
     const event = createVerifiedEvent(args);
 
-    console.log(`Sending test webhook for issue ${event.issueIdentifier} with label "${args.label}"...`);
+    console.log(
+      `Sending test webhook for issue ${event.issueIdentifier} with label "${args.label}"...`,
+    );
     await sendWebhook(event, config);
-  } catch (err) {
-    console.error('Error:', err instanceof Error ? err.message : String(err));
+  } catch (error) {
+    console.error('Error:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }

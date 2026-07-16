@@ -50,8 +50,8 @@ export class WebhookController {
         this.logger.warn('Invalid webhook signature');
         throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
       }
-    } catch (err) {
-      this.logger.error('Signature verification error:', err);
+    } catch (error) {
+      this.logger.error('Signature verification error:', error);
       throw new HttpException('Bad Request', HttpStatus.BAD_REQUEST);
     }
 
@@ -60,8 +60,8 @@ export class WebhookController {
     try {
       const parsed = typeof body === 'string' ? (JSON.parse(body) as unknown) : body;
       webhook = parseLinearWebhook(parsed);
-    } catch (err) {
-      this.logger.error('Webhook parsing error:', err);
+    } catch (error) {
+      this.logger.error('Webhook parsing error:', error);
       throw new HttpException('Invalid webhook format', HttpStatus.BAD_REQUEST);
     }
 

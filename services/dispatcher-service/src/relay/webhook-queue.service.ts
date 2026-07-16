@@ -38,7 +38,7 @@ export class WebhookQueueService implements OnModuleInit {
         attempts: 0,
       });
       this.logger.debug(`Enqueued webhook ${webhookId} (row: ${id})`);
-    } catch (err) {
+    } catch (error) {
       // Unique constraint violation on webhookId: duplicate delivery, already queued or processing
       // Silently return — the relay's duplicate will be handled by our unique constraint
       this.logger.debug(`Webhook ${webhookId} already queued or processed (duplicate delivery)`);
@@ -71,15 +71,17 @@ export class WebhookQueueService implements OnModuleInit {
           // Success: delete the row
           await this.queueRepository.delete(row.id);
           this.logger.log(`Processed webhook ${row.webhookId} (row: ${row.id})`);
-        } catch (err) {
+        } catch (error) {
           // Failure: mark as failed (no retry, since dispatchWebhook already posted error feedback to Linear)
-          const errorMessage = err instanceof Error ? err.message : String(err);
+          const errorMessage = error instanceof Error ? error.message : String(error);
           await this.queueRepository.update(row.id, {
             status: 'failed',
             lastError: errorMessage,
             attempts: row.attempts + 1,
           });
-          this.logger.error(`Failed to process webhook ${row.webhookId} (row: ${row.id}): ${errorMessage}`);
+          this.logger.error(
+            `Failed to process webhook ${row.webhookId} (row: ${row.id}): ${errorMessage}`,
+          );
           // Stop processing to avoid hammering on the same error repeatedly
           break;
         }

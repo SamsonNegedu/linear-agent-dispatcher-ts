@@ -62,8 +62,8 @@ export class AdminController {
     try {
       await this.subscribers.deleteSubscriber(subscriberId);
       this.logger.log(`Subscriber ${subscriberId} revoked via admin API`);
-    } catch (err) {
-      this.logger.error(`Failed to delete subscriber ${subscriberId}:`, err);
+    } catch (error) {
+      this.logger.error(`Failed to delete subscriber ${subscriberId}:`, error);
       throw new HttpException('Failed to revoke subscriber', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
@@ -71,10 +71,7 @@ export class AdminController {
   @Get('api/deliveries')
   @UseGuards(AdminAuthGuard)
   @HttpCode(200)
-  async getDeliveries(
-    @Query('teamKey') teamKey: string,
-    @Query('limit') limitStr?: string,
-  ) {
+  async getDeliveries(@Query('teamKey') teamKey: string, @Query('limit') limitStr?: string) {
     if (!teamKey) {
       throw new HttpException('teamKey query parameter required', HttpStatus.BAD_REQUEST);
     }

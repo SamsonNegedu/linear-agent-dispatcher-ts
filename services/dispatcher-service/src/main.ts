@@ -50,7 +50,7 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err) => {
-  console.error('Failed to bootstrap:', err);
+main().catch((error) => {
+  console.error('Failed to bootstrap:', error);
   process.exitCode = 1;
 });

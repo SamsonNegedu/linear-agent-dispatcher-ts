@@ -106,10 +106,10 @@ export class ActivityNotifierService {
     try {
       const result = await this.linearClient.createActivity(sessionId, type, body);
       this.logger.log(`${logTag} Activity posted: ${result.id} [${type}]`);
-    } catch (err) {
+    } catch (error) {
       // Log but don't fail — activity posting is not critical to run execution
       // If Linear API is down, runs should still complete
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`${logTag} Failed to post activity: ${errorMsg} [${type}]`);
     }
   }

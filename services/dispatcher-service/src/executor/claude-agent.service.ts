@@ -63,9 +63,9 @@ export class ClaudeAgentService {
         stderr += data.toString();
       });
 
-      child.on('error', (err) => {
+      child.on('error', (error) => {
         if (timeoutHandle) clearTimeout(timeoutHandle);
-        reject(err);
+        reject(error);
       });
 
       child.on('close', (code) => {

@@ -25,10 +25,10 @@ export class HealthController {
     try {
       await this.store.ping();
       return { status: 'ok' };
-    } catch (err) {
-      this.logger.error('Health check failed:', err);
+    } catch (error) {
+      this.logger.error('Health check failed:', error);
       throw new HttpException(
-        { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' },
+        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
@@ -47,10 +47,10 @@ export class HealthController {
         lastWebhookAt: stats.lastWebhookAt?.toISOString() || null,
         runsToday: stats.byStatus,
       };
-    } catch (err) {
-      this.logger.error('Status check failed:', err);
+    } catch (error) {
+      this.logger.error('Status check failed:', error);
       throw new HttpException(
-        { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' },
+        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
