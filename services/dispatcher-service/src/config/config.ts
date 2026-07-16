@@ -59,7 +59,7 @@ export const loadConfig = (): DispatcherConfig => {
     database: {
       path: process.env.DISPATCHER_DB_PATH || './data/dispatcher.db',
       synchronize: nodeEnv !== 'production',
-      logging: nodeEnv === 'development',
+      logging: process.env.TYPEORM_LOGGING === 'true',
     },
     linear: {
       apiKey: process.env.LINEAR_API_KEY,

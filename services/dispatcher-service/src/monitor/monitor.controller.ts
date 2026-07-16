@@ -68,12 +68,13 @@ export class MonitorController {
         }
       }
 
+      const byStatus = stats.byStatus || {};
       return {
         counts: {
-          pending: stats.byStatus['pending'] || 0,
-          running: stats.byStatus['running'] || 0,
-          succeeded: stats.byStatus['succeeded'] || 0,
-          failed: stats.byStatus['failed'] || 0,
+          pending: (byStatus as Record<string, number>)['pending'] || 0,
+          running: (byStatus as Record<string, number>)['running'] || 0,
+          succeeded: (byStatus as Record<string, number>)['succeeded'] || 0,
+          failed: (byStatus as Record<string, number>)['failed'] || 0,
         },
         repos: Array.from(repoMap.values()),
       };
