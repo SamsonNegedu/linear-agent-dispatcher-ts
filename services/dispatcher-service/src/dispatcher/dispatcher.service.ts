@@ -7,8 +7,8 @@ import { ReposConfigService } from '../config/repos-config.service';
 import { ActivityNotifierService } from '../executor/activity-notifier.service';
 import { IssueCommentService } from '../executor/issue-comment.service';
 import { LinearGraphQLClient } from '@linear-agent/linear-client';
-import { LabelTriggerService, LabelValidationError } from './label-trigger.service';
 import { LabelValidationService } from './label-validation.service';
+import { ValidationError } from './validation.error';
 import { DuplicatePayloadError } from '../store/store.errors';
 
 @Injectable()
@@ -34,20 +34,57 @@ export class DispatcherService {
     this.logger.log(`Dispatching webhook: ${event.webhookId} for issue ${event.issueIdentifier}`);
 
     try {
-      // Special handling for label triggers (Issue webhooks with mode label added)
-      if (LabelTriggerService.isLabelTrigger(event)) {
-        this.logger.log(`Label trigger detected: mode label added to ${event.issueIdentifier}`);
-        return this.handleLabelTrigger(event);
+      // Resolve labels (with GraphQL fallback if webhook incomplete)
+      const labels = this.linearGraphqlClient
+        ? await this.linearGraphqlClient.resolveLabels(event.issueId, event.labels || [])
+        : event.labels || [];
+
+      // Validate and resolve labels to routing decision
+      const { repoLabel, repoPath, skill } = LabelValidationService.resolveRun(
+        labels,
+        this.reposConfig,
+      );
+
+      // Enqueue run
+      const run = await this.store.enqueueRun({
+        provider: 'linear',
+        issueId: event.issueId,
+        issueIdentifier: event.issueIdentifier,
+        issueTitle: event.issueTitle,
+        idempotencyKey: event.webhookId,
+        webhookId: event.webhookId,
+        domainLabel: repoLabel,
+        repoPath,
+        skill,
+        triggerSource: event.labelChange ? 'label' : 'webhook',
+        providerSessionId: event.sessionId,
+      });
+
+      this.logger.log(`Enqueued run: ${run.id} in repo: ${repoPath} with skill: ${skill}`);
+
+      // Post acknowledgment to Linear session if available
+      if (event.sessionId) {
+        await this.activityNotifier.postStart(event.sessionId, event.issueIdentifier, repoLabel, skill, run.id);
       }
 
-      // Standard webhook dispatch (agent sessions, issue comments, etc)
-      return await this.handleStandardWebhook(event);
+      // Spawn handler (fire-and-forget)
+      this.executorService.executeRun(run.id, event).catch((err) => {
+        this.logger.error(`Executor error for run ${run.id}:`, err);
+      });
     } catch (err) {
-      this.logger.error(`Failed to dispatch webhook ${event.webhookId}:`, err);
-
       // Skip elicitation feedback for duplicate payloads (already processed)
       if (err instanceof DuplicatePayloadError) {
         throw err;
+      }
+
+      // Distinguish between expected validation failures and unexpected bugs
+      if (err instanceof ValidationError) {
+        // Expected failure: user needs to fix labels/config
+        // Already posting comment/activity below; log at INFO level with clear marker
+        this.logger.log(`[ACTION_POSTED] Label validation failed for ${event.issueIdentifier}: ${err.message}`);
+      } else {
+        // Unexpected failure: something is broken on the server
+        this.logger.error(`[NEEDS_ATTENTION] Unexpected error dispatching ${event.webhookId}:`, err);
       }
 
       // Route error notification based on webhook type:
@@ -62,102 +99,6 @@ export class DispatcherService {
       }
 
       throw err;
-    }
-  }
-
-  private async handleLabelTrigger(event: VerifiedEvent): Promise<void> {
-    // For label triggers, we need to validate labels before dispatching
-    try {
-      // Validate that issue has exactly one mode label
-      LabelTriggerService.validateLabels(event.labels);
-
-      // Resolve labels (with GraphQL fallback if webhook incomplete)
-      const labels = this.linearGraphqlClient
-        ? await this.linearGraphqlClient.resolveLabels(event.issueId, event.labels || [])
-        : event.labels || [];
-
-      // Route and enqueue
-      const { repoLabel, repoPath, skill } = LabelValidationService.resolveRun(
-        labels,
-        this.reposConfig,
-      );
-
-      const run = await this.store.enqueueRun({
-        provider: 'linear',
-        issueId: event.issueId,
-        issueIdentifier: event.issueIdentifier,
-        idempotencyKey: event.webhookId,
-        webhookId: event.webhookId,
-        domainLabel: repoLabel,
-        repoPath,
-        skill,
-        triggerSource: 'label',
-        providerSessionId: event.sessionId,
-      });
-
-      this.logger.log(
-        `Label trigger enqueued run: ${run.id} in repo: ${repoPath} with skill: ${skill}`,
-      );
-
-      // Spawn handler (fire-and-forget)
-      this.executorService.executeRun(run.id, event).catch((err) => {
-        this.logger.error(`Executor error for run ${run.id}:`, err);
-      });
-    } catch (err) {
-      if (err instanceof LabelValidationError) {
-        this.logger.warn(
-          `Label trigger validation failed for ${event.issueIdentifier}: ${err.message}`,
-        );
-        // Label trigger validation errors are not fatal — just log and return
-        // The operator will see the issue and fix the labels
-        return;
-      }
-      throw err;
-    }
-  }
-
-  private async handleStandardWebhook(event: VerifiedEvent): Promise<void> {
-    // 0. Resolve labels (with GraphQL fallback if webhook incomplete)
-    const labels = this.linearGraphqlClient
-      ? await this.linearGraphqlClient.resolveLabels(event.issueId, event.labels || [])
-      : event.labels || [];
-
-    // 1. Resolve domain label, repo path, and skill from issue labels
-    const { repoLabel, repoPath, skill } = LabelValidationService.resolveRun(
-      labels,
-      this.reposConfig,
-    );
-
-    // 2. Enqueue run in store
-    const run = await this.store.enqueueRun({
-      provider: 'linear',
-      issueId: event.issueId,
-      issueIdentifier: event.issueIdentifier,
-      idempotencyKey: event.webhookId,
-      webhookId: event.webhookId,
-      domainLabel: repoLabel,
-      repoPath,
-      skill,
-      triggerSource: 'webhook',
-      providerSessionId: event.sessionId,
-    });
-
-    this.logger.log(`Enqueued run: ${run.id} in repo: ${repoPath} with skill: ${skill}`);
-
-    // 3. Spawn handler (fire-and-forget, don't wait)
-    this.executorService.executeRun(run.id, event).catch((err) => {
-      this.logger.error(`Executor error for run ${run.id}:`, err);
-    });
-
-    // 4. Post acknowledgment to Linear session if available
-    if (event.sessionId) {
-      await this.activityNotifier.postStart(
-        event.sessionId,
-        event.issueIdentifier,
-        repoLabel,
-        skill,
-        run.id,
-      );
     }
   }
 }

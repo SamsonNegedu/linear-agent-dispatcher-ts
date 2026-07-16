@@ -24,7 +24,6 @@ interface ClaudeOutput {
 @Injectable()
 export class ExecutorService {
   private readonly logger = new Logger(ExecutorService.name);
-  private readonly repoMutexes = new Map<string, Promise<void>>();
 
   constructor(
     @Inject('IStoreRepository') private readonly store: IStoreRepository,
@@ -55,41 +54,38 @@ export class ExecutorService {
         );
       }
 
-      // Acquire per-repo mutex to serialize runs (one at a time per repo)
-      await this.withRepoLock(run.repoPath, async () => {
-        const result = await this.spawnClaudeHandler(
-          run.skill,
-          runId,
-          event,
-          run.repoPath,
-          run.claudeSessionId,
-        );
+      const result = await this.spawnClaudeHandler(
+        run.skill,
+        runId,
+        event,
+        run.repoPath,
+        run.claudeSessionId,
+      );
 
-        // Mark complete
-        await this.store.completeRun(runId, {
-          status: result.status,
-          exitCode: result.exitCode,
-          errorSnippet: result.errorSnippet,
-          claudeSessionId: result.claudeSessionId,
-        });
-
-        this.logger.log(`Run completed: ${runId} (${result.status})`);
-
-        // Post completion activity
-        if (run.providerSessionId) {
-          if (result.status === 'succeeded') {
-            await this.activityNotifier.postSuccess(
-              run.providerSessionId,
-              `Claude skill \`/${run.skill}\` completed successfully in \`${run.domainLabel}\` repo`,
-            );
-          } else {
-            await this.activityNotifier.postError(
-              run.providerSessionId,
-              result.errorSnippet || `Run failed with exit code ${result.exitCode}`,
-            );
-          }
-        }
+      // Mark complete
+      await this.store.completeRun(runId, {
+        status: result.status,
+        exitCode: result.exitCode,
+        errorSnippet: result.errorSnippet,
+        claudeSessionId: result.claudeSessionId,
       });
+
+      this.logger.log(`Run completed: ${runId} (${result.status})`);
+
+      // Post completion activity
+      if (run.providerSessionId) {
+        if (result.status === 'succeeded') {
+          await this.activityNotifier.postSuccess(
+            run.providerSessionId,
+            `Claude skill \`/${run.skill}\` completed successfully in \`${run.domainLabel}\` repo`,
+          );
+        } else {
+          await this.activityNotifier.postError(
+            run.providerSessionId,
+            result.errorSnippet || `Run failed with exit code ${result.exitCode}`,
+          );
+        }
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       this.logger.error(`Run failed: ${runId} - ${errorMsg}`);
@@ -102,30 +98,6 @@ export class ExecutorService {
       if (run.providerSessionId) {
         await this.activityNotifier.postError(run.providerSessionId, (err as Error).message);
       }
-    }
-  }
-
-  private async withRepoLock<T>(repoPath: string, fn: () => Promise<T>): Promise<T> {
-    // Get existing lock promise or create new one
-    const existingLock = this.repoMutexes.get(repoPath) || Promise.resolve();
-
-    // Chain this operation after existing lock
-    let releaseLock: () => void;
-    const newLock = new Promise<void>((resolve) => {
-      releaseLock = resolve;
-    });
-    this.repoMutexes.set(repoPath, newLock);
-
-    try {
-      // Wait for previous locks to complete
-      await existingLock;
-      // Execute this operation
-      return await fn();
-    } finally {
-      // Release lock for next operation
-      releaseLock!();
-      // Clean up if no more waiters
-      this.repoMutexes.delete(repoPath);
     }
   }
 
@@ -166,11 +138,11 @@ export class ExecutorService {
       let stderr = '';
       let timeoutHandle: NodeJS.Timeout | null = null;
 
-      child.stdout?.on('data', (data) => {
+      child.stdout?.on('data', (data: Buffer) => {
         stdout += data.toString();
       });
 
-      child.stderr?.on('data', (data) => {
+      child.stderr?.on('data', (data: Buffer) => {
         stderr += data.toString();
       });
 

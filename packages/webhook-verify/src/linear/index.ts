@@ -19,6 +19,7 @@ export interface VerifiedEvent {
   assigneeId?: string;
   issueId: string;
   issueIdentifier: string;
+  issueTitle?: string;
   labels: string[];
   organizationId: string;
   sessionId?: string; // Linear agent session ID for activity tracking
@@ -124,6 +125,7 @@ const parseIssueWebhook = (data: Record<string, unknown>): VerifiedEvent => {
     assigneeId,
     issueId,
     issueIdentifier,
+    issueTitle: issue.title as string | undefined,
     labels,
     organizationId,
     sessionId,

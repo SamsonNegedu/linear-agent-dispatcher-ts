@@ -80,6 +80,7 @@ export class TypeORMStoreRepository implements IStoreRepository {
       run.provider = input.provider;
       run.issueId = input.issueId;
       run.issueIdentifier = input.issueIdentifier;
+      run.issueTitle = input.issueTitle;
       run.webhookId = input.webhookId;
       run.domainLabel = input.domainLabel;
       run.repoPath = input.repoPath;
@@ -134,6 +135,15 @@ export class TypeORMStoreRepository implements IStoreRepository {
 
   async listRuns(limit: number): Promise<Run[]> {
     const runs = await this.runRepository.find({
+      order: { startedAt: 'DESC' },
+      take: limit,
+    });
+    return runs.map((r) => this.entityToRun(r));
+  }
+
+  async listRunsByStatus(status: Run['status'], limit: number): Promise<Run[]> {
+    const runs = await this.runRepository.find({
+      where: { status },
       order: { startedAt: 'DESC' },
       take: limit,
     });
@@ -201,7 +211,7 @@ export class TypeORMStoreRepository implements IStoreRepository {
     await this.runRepository.query('SELECT 1');
   }
 
-  async getRunStats(sinceMs: number): Promise<{ lastWebhookAt: Date | null; byStatus: Record<any, number> }> {
+  async getRunStats(sinceMs: number): Promise<{ lastWebhookAt: Date | null; byStatus: Record<string, number> }> {
     const cutoff = new Date(Date.now() - sinceMs);
     const runs = await this.runRepository.find({
       where: { startedAt: MoreThanOrEqual(cutoff) },
@@ -231,6 +241,7 @@ export class TypeORMStoreRepository implements IStoreRepository {
       provider: entity.provider,
       issueId: entity.issueId,
       issueIdentifier: entity.issueIdentifier,
+      issueTitle: entity.issueTitle,
       webhookId: entity.webhookId,
       domainLabel: entity.domainLabel,
       repoPath: entity.repoPath,

@@ -16,6 +16,9 @@ export class RunEntity {
   @Column('varchar', { length: 255 })
   issueIdentifier!: string;
 
+  @Column('text', { nullable: true })
+  issueTitle?: string;
+
   @Column('varchar', { length: 255 })
   webhookId!: string;
 

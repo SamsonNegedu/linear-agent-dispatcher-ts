@@ -3,6 +3,7 @@ export interface Run {
   provider: string;
   issueId: string;
   issueIdentifier: string;
+  issueTitle?: string;
   webhookId: string;
   domainLabel: string;
   repoPath: string;
@@ -23,6 +24,7 @@ export interface EnqueueRunInput {
   provider: string;
   issueId: string;
   issueIdentifier: string;
+  issueTitle?: string;
   idempotencyKey: string;
   webhookId: string;
   domainLabel: string;
@@ -51,6 +53,7 @@ export interface IStoreRepository {
     sessionId: string,
   ): Promise<Run | null>;
   listRuns(limit: number): Promise<Run[]>;
+  listRunsByStatus(status: Run['status'], limit: number): Promise<Run[]>;
   hasActiveRun(provider: string, issueId: string): Promise<boolean>;
   markRunning(id: string, pgid?: number): Promise<void>;
   completeRun(id: string, out: CompleteRunInput): Promise<void>;

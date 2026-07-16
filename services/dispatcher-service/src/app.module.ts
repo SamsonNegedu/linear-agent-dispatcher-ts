@@ -5,6 +5,7 @@ import { ConfigValidatorService } from './config/config-validator.service';
 import { RelayModule } from './relay/relay.module';
 import { PreflightModule } from './preflight/preflight.module';
 import { HealthModule } from './health/health.module';
+import { MonitorModule } from './monitor/monitor.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { HealthModule } from './health/health.module';
     DispatcherConfigModule,
     PreflightModule,
     HealthModule,
+    MonitorModule,
     RelayModule,
   ],
   controllers: [],

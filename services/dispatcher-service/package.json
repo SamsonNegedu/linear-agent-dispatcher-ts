@@ -9,9 +9,11 @@
     "dev:watch": "nodemon --watch src --ext ts --exec 'pnpm dev'",
     "build": "tsc",
     "start": "node dist/services/dispatcher-service/src/main.js",
+    "monitor": "ts-node src/cli/monitor.ts",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "connect-relay": "ts-node src/cli/connect-relay.ts",
+    "update-relay": "ts-node src/cli/update-relay.ts",
     "test-webhook": "ts-node src/cli/test-webhook.ts"
   },
   "dependencies": {
