@@ -9,7 +9,7 @@
     "dev:watch": "nodemon --watch src --ext ts --exec 'pnpm dev'",
     "build": "tsc",
     "start": "node dist/services/dispatcher-service/src/main.js",
-    "monitor": "ts-node src/cli/monitor.ts",
+    "monitor": "ts-node src/cli/monitor.tsx",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "connect-relay": "ts-node src/cli/connect-relay.ts",
@@ -37,7 +37,9 @@
     "pino": "^8.17.0",
     "nestjs-pino": "^4.6.0",
     "uuid": "^9.0.0",
-    "graphql-request": "^6.0.0"
+    "graphql-request": "^6.0.0",
+    "ink": "^5.0.0",
+    "react": "^18.2.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -47,6 +49,7 @@
     "@types/jest": "^29.5.11",
     "@types/js-yaml": "^4.0.0",
     "@types/express": "^4.17.0",
+    "@types/react": "^18.2.0",
     "concurrently": "^8.2.2",
     "jest": "^29.7.0",
     "nodemon": "^3.1.0",

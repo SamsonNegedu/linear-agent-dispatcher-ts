@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "./dist",
     "noEmitOnError": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "moduleResolution": "nodenext",
+    "module": "NodeNext",
+    "jsx": "react"
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "test"]
