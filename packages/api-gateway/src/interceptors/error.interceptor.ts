@@ -5,7 +5,7 @@ import {
   CallHandler,
   HttpException,
 } from '@nestjs/common';
-import { Observable, throwError } from 'rxjs';
+import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { Request, Response } from 'express';
 
@@ -52,7 +52,7 @@ export class ErrorInterceptor implements NestInterceptor {
 
         response.status(errorResponse.statusCode).json(errorResponse);
 
-        return throwError(() => error);
+        throw error;
       }),
     );
   }

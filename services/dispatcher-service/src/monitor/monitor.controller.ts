@@ -8,13 +8,15 @@ import {
   Logger,
   Query,
 } from '@nestjs/common';
-import { IStoreRepository } from '../store/store.interfaces';
+import type { IStoreRepository } from '../store/store.interfaces';
 import { ReposConfigService } from '../config/repos-config.service';
-import { Run } from '../store/store.interfaces';
+import type { Run } from '../store/store.interfaces';
 
 interface RepoStatus {
   repoPath: string;
   domainLabel: string;
+  description?: string;
+  modes: Array<{ label: string; skill: string }>;
   runningCount: number;
   currentRuns: Array<{ issueIdentifier: string; issueTitle?: string }>;
 }
@@ -51,6 +53,8 @@ export class MonitorController {
         repoMap.set(repo.path, {
           repoPath: repo.path,
           domainLabel: repo.label,
+          description: repo.description,
+          modes: repo.modes ? Object.entries(repo.modes).map(([label, skill]) => ({ label, skill })) : [],
           runningCount: 0,
           currentRuns: [],
         });

@@ -129,8 +129,9 @@ export class LinearGraphQLClient {
         id: response.agentActivityCreate.agentActivity.id,
       };
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       this.logger?.error(
-        `Failed to create activity (session=${agentSessionId}, type=${type}): ${err instanceof Error ? err.message : err}`,
+        `Failed to create activity (session=${agentSessionId}, type=${type}): ${errorMsg}`,
       );
       throw err;
     }
@@ -178,8 +179,9 @@ export class LinearGraphQLClient {
 
       return { id: response.commentCreate.comment.id };
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       this.logger?.error(
-        `Failed to create comment (issue=${issueId}): ${err instanceof Error ? err.message : err}`,
+        `Failed to create comment (issue=${issueId}): ${errorMsg}`,
       );
       throw err;
     }
@@ -212,8 +214,9 @@ export class LinearGraphQLClient {
       );
       return result.labels;
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       this.logger?.warn(
-        `GraphQL label fallback failed for issue ${issueId}, using webhook labels: ${err instanceof Error ? err.message : err}`,
+        `GraphQL label fallback failed for issue ${issueId}, using webhook labels: ${errorMsg}`,
       );
       return webhookLabels;
     }

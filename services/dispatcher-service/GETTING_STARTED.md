@@ -127,8 +127,25 @@ Watch dispatcher logs; a new run should appear in `data/dispatcher.db`.
 - Watch the dispatcher logs for `Received webhook`.
 - Check `data/dispatcher.db` — a new run row should appear once Claude is dispatched.
 
-## 6. Common issues
+## 6. Moving dispatcher to a new server
+
+If you're moving your dispatcher to a different machine or changing its publicly reachable URL, update the relay without re-authenticating:
+
+```bash
+pnpm update-relay --local-endpoint=https://new-server.com/webhooks/relay
+```
+
+The command:
+- Reads your existing `RELAY_SUBSCRIBER_SECRET` from `.env.local` (proof of ownership)
+- Reads the `RELAY_URL` from `.env.local` (where `connect-relay` stored it)
+- Sends a PATCH request to update your subscription endpoint
+- Prints confirmation
+
+No Linear OAuth re-flow, no orphaned subscriptions — the relay just updates your endpoint and you're live on the new server.
+
+## 7. Common issues
 
 - **"RELAY_SUBSCRIBER_SECRET is required when RELAY_ENABLED=true"** — `connect-relay` didn't finish, or wrote to the wrong `.env.local` (make sure you ran it from `services/dispatcher-service`). Re-run `connect-relay`.
 - **Claude never runs** — check `CLAUDE_BIN_PATH` resolves (`which claude`) and that you're authenticated (`claude` should not prompt for login).
 - **Nothing happens on issue assignment** — confirm the relay is reachable and its OAuth app's redirect URI matches its deployment (local or shared), and that `connect-relay` completed (`RELAY_ENABLED=true` in `.env.local`).
+- **`update-relay` fails with "Subscriber not found"** — the `RELAY_SUBSCRIBER_SECRET` in your `.env.local` doesn't match the relay's records. Re-run `pnpm connect-relay` to generate a fresh subscription.

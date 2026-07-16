@@ -22,7 +22,7 @@ export interface LoggingConfig {
   logResponseBody?: boolean;
 }
 
-const DEFAULT_SKIP_PATHS = ['/health', '/healthz', '/ready', '/metrics', '/ping'];
+const DEFAULT_SKIP_PATHS = ['/health', '/healthz', '/ready', '/metrics', '/ping', '/monitor'];
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -49,7 +49,7 @@ export class LoggingInterceptor implements NestInterceptor {
     const ctx = requestContextManager.getContext();
 
     return next.handle().pipe(
-      tap((data) => {
+      tap((data: unknown) => {
         const duration = Date.now() - startTime;
         const statusCode = response.statusCode;
 
@@ -68,8 +68,10 @@ export class LoggingInterceptor implements NestInterceptor {
 
         return data;
       }),
-      catchError((error) => {
+      catchError((error: unknown) => {
         const duration = Date.now() - startTime;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
 
         log.error?.({
           message: `${method} ${url} failed`,
@@ -80,8 +82,8 @@ export class LoggingInterceptor implements NestInterceptor {
           requestId: ctx?.requestId,
           correlationId: ctx?.correlationId,
           ip: ctx?.ip,
-          error: error.message,
-          stack: error.stack,
+          error: errorMessage,
+          stack: errorStack,
         });
 
         throw error;

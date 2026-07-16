@@ -1,9 +1,8 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { spawn } from 'child_process';
-import { IStoreRepository } from '../store/store.interfaces';
-import { VerifiedEvent } from '@webhook-verify/core';
-import { DispatcherConfig } from '../config/config';
+import type { IStoreRepository } from '../store/store.interfaces';
+import type { VerifiedEvent } from '@webhook-verify/core';
 import { ActivityNotifierService } from './activity-notifier.service';
+import { ClaudeAgentService } from './claude-agent.service';
 
 export interface ExecutionResult {
   runId: string;
@@ -13,21 +12,13 @@ export interface ExecutionResult {
   claudeSessionId?: string;
 }
 
-interface ClaudeOutput {
-  sessionId?: string;
-  result?: string;
-  totalCostUSD?: number;
-  stopReason?: string;
-  error?: string;
-}
-
 @Injectable()
 export class ExecutorService {
   private readonly logger = new Logger(ExecutorService.name);
 
   constructor(
     @Inject('IStoreRepository') private readonly store: IStoreRepository,
-    @Inject('DispatcherConfig') private readonly config: DispatcherConfig,
+    private readonly claudeAgent: ClaudeAgentService,
     private readonly activityNotifier: ActivityNotifierService,
   ) {}
 
@@ -54,13 +45,17 @@ export class ExecutorService {
         );
       }
 
-      const result = await this.spawnClaudeHandler(
-        run.skill,
+      const result = await this.claudeAgent.spawn(run.skill, event.issueIdentifier, run.repoPath, {
+        resumeSessionId: run.claudeSessionId,
+      });
+
+      const executionResult: ExecutionResult = {
         runId,
-        event,
-        run.repoPath,
-        run.claudeSessionId,
-      );
+        status: result.status,
+        exitCode: result.exitCode,
+        errorSnippet: result.errorSnippet,
+        claudeSessionId: result.sessionId,
+      };
 
       // Mark complete
       await this.store.completeRun(runId, {
@@ -70,7 +65,12 @@ export class ExecutorService {
         claudeSessionId: result.claudeSessionId,
       });
 
-      this.logger.log(`Run completed: ${runId} (${result.status})`);
+      if (result.status === 'succeeded') {
+        this.logger.log(`Run completed: ${runId} (${result.status})`);
+      } else {
+        const reason = result.errorSnippet || `exit code ${result.exitCode}`;
+        this.logger.error(`Run completed: ${runId} (${result.status}) - ${reason}`);
+      }
 
       // Post completion activity
       if (run.providerSessionId) {
@@ -184,7 +184,7 @@ export class ExecutorService {
             runId,
             status: 'failed',
             exitCode: code ?? undefined,
-            errorSnippet,
+            errorSnippet: errorSnippet || `Process exited with code ${code} and produced no output`,
             claudeSessionId: sessionId,
           });
         }

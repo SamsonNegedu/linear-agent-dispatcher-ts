@@ -58,7 +58,7 @@ export class WebhookController {
     // 2. Parse and validate webhook
     let webhook;
     try {
-      const parsed = typeof body === 'string' ? JSON.parse(body) : body;
+      const parsed = typeof body === 'string' ? (JSON.parse(body) as unknown) : body;
       webhook = parseLinearWebhook(parsed);
     } catch (err) {
       this.logger.error('Webhook parsing error:', err);

@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as http from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { signWebhookPayload } from '@webhook-verify/core';
-import { VerifiedEvent } from '@webhook-verify/core';
+import type { VerifiedEvent } from '@webhook-verify/core';
 
 interface CLIArgs {
   issueId: string;
@@ -158,5 +158,5 @@ async function main() {
 }
 
 if (require.main === module) {
-  main();
+  void main();
 }

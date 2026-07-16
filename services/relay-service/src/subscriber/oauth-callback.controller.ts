@@ -32,22 +32,25 @@ export class OAuthCallbackController {
       throw new HttpException('Missing code or state parameter', HttpStatus.BAD_REQUEST);
     }
 
-    // Validate signed state and extract localEndpoint (+ optional CLI callback)
+    // Validate signed state and extract localEndpoint, cliCallbackUrl, relayBaseUrl
     let localEndpoint: string;
     let cliCallbackUrl: string | undefined;
+    let relayBaseUrl: string | undefined;
     try {
       const stateData = this.oauthService.validateSignedState(state);
       localEndpoint = stateData.endpoint;
       cliCallbackUrl = stateData.cliCallbackUrl;
+      relayBaseUrl = stateData.relayBaseUrl;
       new URL(localEndpoint); // Validate it's a valid URL
     } catch (err) {
-      this.logger.warn(`State validation failed: ${err instanceof Error ? err.message : err}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`State validation failed: ${errorMsg}`);
       throw new HttpException('Invalid or expired state parameter', HttpStatus.BAD_REQUEST);
     }
 
     try {
       // Step 1: Exchange code for token
-      const tokenResponse = await this.oauthService.exchangeCodeForToken(code);
+      const tokenResponse = await this.oauthService.exchangeCodeForToken(code, relayBaseUrl);
       const accessToken = tokenResponse.access_token;
 
       // Step 2: Get user info and teams from Linear
@@ -70,7 +73,7 @@ export class OAuthCallbackController {
           );
 
           this.logger.log(`Auto-registered subscriber ${subscriberId} for team ${teamKey}`);
-          return { teamKey, teamName: team.name };
+          return { teamKey, teamName: team.name, subscriberId };
         }),
       );
 

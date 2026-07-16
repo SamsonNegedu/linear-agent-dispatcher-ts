@@ -20,13 +20,16 @@ export class LinearOAuthClient {
    * `cliCallbackUrl`, when provided, is threaded through the signed state so the
    * callback handler can hand the result back to a local CLI listener instead of
    * just returning JSON to the browser.
+   * `relayBaseUrl` is stored in state so the callback handler can extract it for
+   * token exchange (must match the redirect_uri passed to Linear).
    */
   generateAuthorizationUrl(
     callbackUrl: string,
     localEndpoint: string,
     cliCallbackUrl?: string,
+    relayBaseUrl?: string,
   ): string {
-    const state = this.generateSignedState(localEndpoint, cliCallbackUrl);
+    const state = this.generateSignedState(localEndpoint, cliCallbackUrl, relayBaseUrl);
 
     const url = new URL(this.authUrl);
     url.searchParams.set('client_id', this.clientId);
@@ -39,10 +42,10 @@ export class LinearOAuthClient {
   }
 
   /**
-   * Validate signed state and extract endpoint (and optional CLI callback URL)
+   * Validate signed state and extract endpoint (and optional CLI callback URL + relay base URL)
    * Throws error if state is invalid, forged, or expired
    */
-  validateSignedState(state: string): { endpoint: string; cliCallbackUrl?: string } {
+  validateSignedState(state: string): { endpoint: string; cliCallbackUrl?: string; relayBaseUrl?: string } {
     const stateData = this.parseSignedState(state);
     if (!stateData) {
       throw new Error('Invalid or tampered state parameter');
@@ -54,6 +57,7 @@ export class LinearOAuthClient {
       stateData.nonce,
       stateData.timestamp,
       stateData.cliCallbackUrl,
+      stateData.relayBaseUrl,
     );
     if (!crypto.timingSafeEqual(Buffer.from(stateData.signature), Buffer.from(expectedSignature))) {
       throw new Error('State signature verification failed');
@@ -65,7 +69,7 @@ export class LinearOAuthClient {
       throw new Error('State parameter expired');
     }
 
-    return { endpoint: stateData.endpoint, cliCallbackUrl: stateData.cliCallbackUrl };
+    return { endpoint: stateData.endpoint, cliCallbackUrl: stateData.cliCallbackUrl, relayBaseUrl: stateData.relayBaseUrl };
   }
 
   /**
@@ -96,15 +100,15 @@ export class LinearOAuthClient {
       );
     }
 
-    return response.json();
+    return response.json() as Promise<LinearTokenResponse>;
   }
 
-  private generateSignedState(endpoint: string, cliCallbackUrl?: string): string {
+  private generateSignedState(endpoint: string, cliCallbackUrl?: string, relayBaseUrl?: string): string {
     const nonce = crypto.randomBytes(16).toString('hex');
     const timestamp = Date.now();
-    const signature = this.computeStateSignature(endpoint, nonce, timestamp, cliCallbackUrl);
+    const signature = this.computeStateSignature(endpoint, nonce, timestamp, cliCallbackUrl, relayBaseUrl);
 
-    const stateObj = { endpoint, nonce, timestamp, signature, cliCallbackUrl };
+    const stateObj = { endpoint, nonce, timestamp, signature, cliCallbackUrl, relayBaseUrl };
     return Buffer.from(JSON.stringify(stateObj)).toString('base64');
   }
 
@@ -116,9 +120,17 @@ export class LinearOAuthClient {
     timestamp: number;
     signature: string;
     cliCallbackUrl?: string;
+    relayBaseUrl?: string;
   } | null {
     try {
-      return JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
+      return JSON.parse(Buffer.from(state, 'base64').toString('utf-8')) as {
+        endpoint: string;
+        nonce: string;
+        timestamp: number;
+        signature: string;
+        cliCallbackUrl?: string;
+        relayBaseUrl?: string;
+      };
     } catch {
       return null;
     }
@@ -129,8 +141,9 @@ export class LinearOAuthClient {
     nonce: string,
     timestamp: number,
     cliCallbackUrl?: string,
+    relayBaseUrl?: string,
   ): string {
-    const message = `${endpoint}:${nonce}:${timestamp}:${cliCallbackUrl ?? ''}`;
+    const message = `${endpoint}:${nonce}:${timestamp}:${cliCallbackUrl ?? ''}:${relayBaseUrl ?? ''}`;
     return crypto.createHmac('sha256', this.clientSecret).update(message).digest('hex');
   }
 }

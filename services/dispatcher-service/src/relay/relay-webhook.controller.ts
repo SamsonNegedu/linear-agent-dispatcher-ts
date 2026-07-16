@@ -11,16 +11,16 @@ import {
   Inject,
 } from '@nestjs/common';
 import { verifyWebhookSignature } from '@webhook-verify/core';
-import { VerifiedEvent } from '@webhook-verify/core';
-import { DispatcherService } from '../dispatcher/dispatcher.service';
-import { DispatcherConfig } from '../config/config';
+import type { VerifiedEvent } from '@webhook-verify/core';
+import { WebhookQueueService } from './webhook-queue.service';
+import type { DispatcherConfig } from '../config/config';
 
 @Controller('webhooks')
 export class RelayWebhookController {
   private readonly logger = new Logger(RelayWebhookController.name);
 
   constructor(
-    private readonly dispatcherService: DispatcherService,
+    private readonly webhookQueueService: WebhookQueueService,
     @Inject('DispatcherConfig') private readonly config: DispatcherConfig,
   ) {}
 
@@ -48,17 +48,20 @@ export class RelayWebhookController {
       const isValid = verifyWebhookSignature(payloadString, signature, secret);
 
       if (!isValid) {
-        this.logger.warn('Invalid webhook signature');
+        this.logger.warn(
+          `[CHECK_RELAY_CONFIG] Signature mismatch for webhook ${payload.webhookId}. ` +
+            `Relay and dispatcher may be using different RELAY_SUBSCRIBER_SECRET values.`,
+        );
         throw new HttpException('Invalid signature', HttpStatus.UNAUTHORIZED);
       }
     } catch (err) {
       if (err instanceof HttpException) throw err;
-      this.logger.error('Signature verification error:', err);
+      this.logger.error(`[CHECK_RELAY_CONFIG] Signature verification error for webhook ${payload?.webhookId}:`, err);
       throw new HttpException('Verification failed', HttpStatus.BAD_REQUEST);
     }
 
-    // Dispatch the webhook event
-    await this.dispatcherService.dispatchWebhook(payload);
+    // Queue the webhook event (fast, local DB insert)
+    await this.webhookQueueService.enqueue(payload);
 
     return { received: true, webhookId: payload.webhookId };
   }

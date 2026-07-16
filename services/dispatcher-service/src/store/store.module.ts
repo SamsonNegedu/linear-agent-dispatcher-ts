@@ -3,8 +3,9 @@ import { TypeOrmModule, getDataSourceToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { RunEntity } from './typeorm/run.entity';
 import { ProcessedWebhookEntity } from './typeorm/processed-webhook.entity';
+import { WebhookQueueEntity } from './typeorm/webhook-queue.entity';
 import { TypeORMStoreRepository } from './typeorm/typeorm-store.repository';
-import { DispatcherConfig } from '../config/config';
+import type { DispatcherConfig } from '../config/config';
 
 const storeProvider: Provider = {
   provide: 'IStoreRepository',
@@ -19,12 +20,12 @@ const storeProvider: Provider = {
       useFactory: (config: DispatcherConfig) => ({
         type: 'better-sqlite3',
         database: config.database.path,
-        entities: [RunEntity, ProcessedWebhookEntity],
+        entities: [RunEntity, ProcessedWebhookEntity, WebhookQueueEntity],
         synchronize: config.database.synchronize,
         logging: config.database.logging,
       }),
     }),
-    TypeOrmModule.forFeature([RunEntity, ProcessedWebhookEntity]),
+    TypeOrmModule.forFeature([RunEntity, ProcessedWebhookEntity, WebhookQueueEntity]),
   ],
   providers: [storeProvider],
   exports: [storeProvider],

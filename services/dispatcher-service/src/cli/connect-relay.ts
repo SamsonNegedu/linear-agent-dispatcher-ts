@@ -12,8 +12,9 @@ interface ConnectRelayOptions {
 
 interface CallbackData {
   secret: string | null;
-  teams: Array<{ teamKey: string; teamName: string }>;
+  teams: Array<{ teamKey: string; teamName: string; subscriberId?: string }>;
   received: boolean;
+  relayUrl?: string;
 }
 
 const DEFAULTS = {
@@ -39,9 +40,10 @@ export async function connectRelay(opts: ConnectRelayOptions): Promise<void> {
 
   const authUrl = await step1_requestAuthUrl(config);
   const server = step2_startCallbackServer(config);
-  await step3_openBrowser(authUrl);
+  step3_openBrowser(authUrl);
   const callbackData = await step4_waitForCallback(server, config);
-  step5_saveCredentials(callbackData.secret!);
+  const firstSubscriberId = callbackData.teams[0]?.subscriberId;
+  step5_saveCredentials(callbackData.secret!, config.relayUrl, config.localEndpoint, firstSubscriberId);
   step6_printSuccess(callbackData.teams, config, callbackData.secret!);
 }
 
@@ -78,6 +80,7 @@ async function step1_requestAuthUrl(config: Config): Promise<string> {
     const params = new URLSearchParams({
       localEndpoint: config.webhookUrl,
       cliCallback: config.callbackUrl,
+      relayUrl: config.relayUrl,
     });
     const response = await fetch(
       `${config.relayUrl}/subscribers/auth/start?${params}`,
@@ -88,8 +91,9 @@ async function step1_requestAuthUrl(config: Config): Promise<string> {
     const data = (await response.json()) as { redirect: string };
     return data.redirect;
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('❌ Failed to get authorization URL from relay');
-    console.error(`   Error: ${err instanceof Error ? err.message : err}`);
+    console.error(`   Error: ${errorMsg}`);
     process.exit(1);
   }
 }
@@ -122,7 +126,9 @@ function handleCallbackRequest(
   const url = new URL(req.url, `http://localhost:${port}`);
   const secret = url.searchParams.get('secret');
   const teamsParam = url.searchParams.get('teams');
-  const teams = teamsParam ? JSON.parse(teamsParam) : [];
+  const teams: CallbackData['teams'] = teamsParam
+    ? (JSON.parse(teamsParam) as CallbackData['teams'])
+    : [];
 
   if (secret) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -148,11 +154,11 @@ function buildSuccessHtml(): string {
   `;
 }
 
-async function step3_openBrowser(authUrl: string): Promise<void> {
+function step3_openBrowser(authUrl: string): void {
   console.log('3️⃣  Opening browser for Linear authorization...\n');
   console.log(`If browser doesn't open, visit this URL manually:\n   ${authUrl}\n`);
 
-  openBrowser(authUrl).catch(() => {
+  void openBrowser(authUrl).catch(() => {
     // Silently fail - user can open manually
   });
 }
@@ -170,6 +176,9 @@ async function step4_waitForCallback(
     console.error('❌ Authorization failed: relay did not return a subscriber secret');
     process.exit(1);
   }
+
+  // Store config data for future use (e.g., update-relay)
+  callbackData.relayUrl = config.relayUrl;
 
   return callbackData;
 }
@@ -209,7 +218,12 @@ function pollForCallback(server: Server, config: Config): Promise<CallbackData> 
   });
 }
 
-function step5_saveCredentials(secret: string): void {
+function step5_saveCredentials(
+  secret: string,
+  relayUrl: string,
+  dispatcherUrl: string,
+  subscriberId?: string,
+): void {
   console.log('5️⃣  Saving credentials to .env\n');
 
   try {
@@ -218,12 +232,18 @@ function step5_saveCredentials(secret: string): void {
       : '';
     let updated = upsertEnvVar(existing, 'RELAY_ENABLED', 'true');
     updated = upsertEnvVar(updated, 'RELAY_SUBSCRIBER_SECRET', secret);
+    updated = upsertEnvVar(updated, 'RELAY_URL', relayUrl);
+    updated = upsertEnvVar(updated, 'RELAY_DISPATCHER_URL', dispatcherUrl);
+    if (subscriberId) {
+      updated = upsertEnvVar(updated, 'RELAY_SUBSCRIBER_ID', subscriberId);
+    }
     fs.writeFileSync(ENV_PATH, updated);
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('⚠️  Failed to write .env.local');
-    console.error(`   Error: ${err instanceof Error ? err.message : err}`);
+    console.error(`   Error: ${errorMsg}`);
     console.log(
-      `   Manual setup: Add to .env.local:\n   RELAY_ENABLED=true\n   RELAY_SUBSCRIBER_SECRET=${secret}`,
+      `   Manual setup: Add to .env.local:\n   RELAY_ENABLED=true\n   RELAY_SUBSCRIBER_SECRET=${secret}\n   RELAY_URL=${relayUrl}\n   RELAY_DISPATCHER_URL=${dispatcherUrl}${subscriberId ? `\n   RELAY_SUBSCRIBER_ID=${subscriberId}` : ''}`,
     );
   }
 }

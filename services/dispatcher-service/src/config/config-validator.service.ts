@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
-import { DispatcherConfig } from './config';
+import type { DispatcherConfig } from './config';
 
 /**
  * Validates dispatcher service configuration on startup.

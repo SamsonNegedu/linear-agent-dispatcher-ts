@@ -26,16 +26,18 @@ async function bootstrap() {
 
     app.enableShutdownHooks();
 
-    process.on('SIGTERM', async () => {
+    process.on('SIGTERM', () => {
       logger.log('SIGTERM received, gracefully shutting down...');
-      await app.close();
-      process.exit(0);
+      void app.close().then(() => {
+        process.exit(0);
+      });
     });
 
-    process.on('SIGINT', async () => {
+    process.on('SIGINT', () => {
       logger.log('SIGINT received, gracefully shutting down...');
-      await app.close();
-      process.exit(0);
+      void app.close().then(() => {
+        process.exit(0);
+      });
     });
   } catch (error) {
     // Using exitCode instead of process.exit() lets the async stderr write flush
@@ -45,4 +47,4 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+void bootstrap();

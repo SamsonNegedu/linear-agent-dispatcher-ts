@@ -7,8 +7,8 @@ import {
   Inject,
   Logger,
 } from '@nestjs/common';
-import { IStoreRepository } from '../store/store.interfaces';
-import { DispatcherConfig } from '../config/config';
+import type { IStoreRepository } from '../store/store.interfaces';
+import type { DispatcherConfig } from '../config/config';
 
 @Controller()
 export class HealthController {

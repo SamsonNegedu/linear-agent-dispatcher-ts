@@ -30,28 +30,46 @@ export class OAuthService {
    * Generate Linear OAuth authorization URL with cryptographically signed state
    * `cliCallbackUrl`, when provided, lets the callback handler redirect the result
    * back to a local CLI listener instead of returning JSON to the browser.
+   * `relayUrl`, when provided, overrides RELAY_BASE_URL env var for constructing the callback URL.
    */
-  generateAuthorizationUrl(localEndpoint: string, cliCallbackUrl?: string): string {
-    const callbackUrl = `${this.config.relay.baseUrl}/callback`;
-    return this.oauthClient.generateAuthorizationUrl(callbackUrl, localEndpoint, cliCallbackUrl);
+  generateAuthorizationUrl(
+    localEndpoint: string,
+    cliCallbackUrl?: string,
+    relayUrl?: string,
+  ): string {
+    const baseUrl = relayUrl || this.config.relay.baseUrl;
+    const callbackUrl = `${baseUrl}/callback`;
+    return this.oauthClient.generateAuthorizationUrl(
+      callbackUrl,
+      localEndpoint,
+      cliCallbackUrl,
+      baseUrl,
+    );
   }
 
   /**
-   * Validate signed state and extract endpoint (and optional CLI callback URL)
+   * Validate signed state and extract endpoint (and optional CLI callback URL + relay base URL)
    */
-  validateSignedState(state: string): { endpoint: string; cliCallbackUrl?: string } {
+  validateSignedState(state: string): {
+    endpoint: string;
+    cliCallbackUrl?: string;
+    relayBaseUrl?: string;
+  } {
     return this.oauthClient.validateSignedState(state);
   }
 
   /**
    * Exchange OAuth code for access token
+   * `relayBaseUrl`, when provided, overrides RELAY_BASE_URL env var (must match the URL sent to Linear).
    */
-  async exchangeCodeForToken(code: string): Promise<LinearTokenResponse> {
-    const callbackUrl = `${this.config.relay.baseUrl}/callback`;
+  async exchangeCodeForToken(code: string, relayBaseUrl?: string): Promise<LinearTokenResponse> {
+    const baseUrl = relayBaseUrl || this.config.relay.baseUrl;
+    const callbackUrl = `${baseUrl}/callback`;
     try {
       return await this.oauthClient.exchangeCodeForToken(code, callbackUrl);
     } catch (err) {
-      this.logger.error(`OAuth token exchange failed: ${err instanceof Error ? err.message : err}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`OAuth token exchange failed: ${errorMsg}`);
       throw err;
     }
   }

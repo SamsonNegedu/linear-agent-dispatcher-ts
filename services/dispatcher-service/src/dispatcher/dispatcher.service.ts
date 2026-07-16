@@ -1,8 +1,8 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { IStoreRepository } from '../store/store.interfaces';
+import type { IStoreRepository } from '../store/store.interfaces';
 import { ExecutorService } from '../executor/executor.service';
-import { VerifiedEvent } from '@webhook-verify/core';
-import { DispatcherConfig } from '../config/config';
+import type { VerifiedEvent } from '@webhook-verify/core';
+import type { DispatcherConfig } from '../config/config';
 import { ReposConfigService } from '../config/repos-config.service';
 import { ActivityNotifierService } from '../executor/activity-notifier.service';
 import { IssueCommentService } from '../executor/issue-comment.service';

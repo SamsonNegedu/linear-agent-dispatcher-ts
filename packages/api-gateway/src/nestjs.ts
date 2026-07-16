@@ -59,7 +59,7 @@ export class ApiGatewayService {
       }
 
       // Register interceptors
-      await registerInterceptors(nestApp, this.config.interceptors);
+      registerInterceptors(nestApp, this.config.interceptors);
 
       // Initialize the app
       await nestApp.init();
@@ -82,10 +82,11 @@ export class ApiGatewayService {
     try {
       const expressApp = await this.getApp();
       const handler = serverlessExpress({ app: expressApp });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument
       return handler(event, context, callback as any);
     } catch (error) {
-      this.logger.log(`[API Gateway] Handler error: ${error}`);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.log(`[API Gateway] Handler error: ${errorMsg}`);
       throw error;
     }
   }

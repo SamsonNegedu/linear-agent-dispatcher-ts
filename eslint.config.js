@@ -18,7 +18,12 @@ export default tseslint.config(
   js.configs.recommended,
   {
     files: ['**/*.ts', '**/*.tsx'],
-    extends: [...tseslint.configs.recommended],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        project: true,
+      },
+    },
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'warn',

@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
-import { DispatcherConfig } from '../config/config';
+import type { DispatcherConfig } from '../config/config';
 import { ReposConfigService } from '../config/repos-config.service';
 import { execFile } from 'child_process';
 import { promisify } from 'util';

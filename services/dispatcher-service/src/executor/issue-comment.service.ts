@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
-import { DispatcherConfig } from '../config/config';
+import type { DispatcherConfig } from '../config/config';
 import { LinearGraphQLClient } from '@linear-agent/linear-client';
 
 /**

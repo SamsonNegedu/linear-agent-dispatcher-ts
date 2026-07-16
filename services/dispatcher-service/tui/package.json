@@ -1,0 +1,21 @@
+{
+  "name": "@dispatcher/monitor-tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.tsx"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.4.3",
+    "@opentui/react": "^0.4.3",
+    "dotenv": "^16.4.5",
+    "react": "^19.2.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "bun-types": "^1.3.14",
+    "typescript": "^5.7.0"
+  }
+}

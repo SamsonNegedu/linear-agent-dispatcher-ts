@@ -53,6 +53,18 @@ export class ReposConfigService {
   }
 
   /**
+   * Get all valid mode labels for a given repository
+   * Returns empty array if repo not found or has no modes
+   */
+  getValidModesForRepo(repoLabel: string): string[] {
+    const repo = this.config.repositories.find((r) => r.label === repoLabel);
+    if (!repo || !repo.modes) {
+      return [];
+    }
+    return Object.keys(repo.modes);
+  }
+
+  /**
    * Get skill for a given mode label on a specific repository
    * Returns undefined if repo not found or mode not configured
    */

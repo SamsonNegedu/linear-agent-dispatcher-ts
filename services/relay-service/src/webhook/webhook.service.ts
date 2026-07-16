@@ -50,8 +50,9 @@ export class WebhookService {
             teamKey = issueInfo.teamKey;
           }
         } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
           this.logger.warn(
-            `Failed to fetch issue ${issueId} for agent session: ${err instanceof Error ? err.message : err}`,
+            `Failed to fetch issue ${issueId} for agent session: ${errorMsg}`,
           );
         }
       }
@@ -169,7 +170,8 @@ export class WebhookService {
 
       // Mark subscriber as recently active (for stale cleanup)
       await this.subscriberService.markWebhookDelivered(subscriberId).catch((err) => {
-        this.logger.warn(`Failed to mark webhook delivered for ${subscriberId}: ${err}`);
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Failed to mark webhook delivered for ${subscriberId}: ${errorMsg}`);
       });
 
       return { subscriberId, endpoint, success: true };

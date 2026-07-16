@@ -51,10 +51,10 @@ export interface RegisterInterceptorsOptions {
  * });
  * ```
  */
-export async function registerInterceptors(
+export function registerInterceptors(
   app: INestApplication,
   options: RegisterInterceptorsOptions = {},
-): Promise<void> {
+): void {
   const {
     disableLogging = false,
     loggingConfig,

@@ -3,7 +3,7 @@ import { DataSource, Repository, LessThan, MoreThanOrEqual } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { RunEntity } from './run.entity';
 import { ProcessedWebhookEntity } from './processed-webhook.entity';
-import { IStoreRepository, Run, EnqueueRunInput, CompleteRunInput } from '../store.interfaces';
+import type { IStoreRepository, Run, EnqueueRunInput, CompleteRunInput } from '../store.interfaces';
 import {
   DuplicatePayloadError,
   ActiveRunError,

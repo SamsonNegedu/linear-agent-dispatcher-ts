@@ -95,6 +95,43 @@ export class SubscriberRegistry {
     );
   }
 
+  async updateEndpointById(
+    subscriberId: string,
+    newEndpoint: string,
+  ): Promise<SubscriberRecord | null> {
+    // Direct lookup by subscriber ID — no scan needed
+    const subscriber = await this.getSubscriber(subscriberId);
+    if (!subscriber) {
+      return null;
+    }
+
+    // Update the endpoint
+    const updated: SubscriberRecord = {
+      ...subscriber,
+      localEndpoint: newEndpoint,
+      lastSeenAt: new Date().toISOString(),
+      version: subscriber.version + 1,
+    };
+
+    await this.client.putItem(this.tableName, this.toDynamoItem(updated));
+    return updated;
+  }
+
+  updateEndpointBySecret(
+    _subscriberSecret: string,
+    _newEndpoint: string,
+  ): Promise<SubscriberRecord | null> {
+    // Looking up by secret requires scanning the entire table (no index exists).
+    // Use updateEndpointById instead and save RELAY_SUBSCRIBER_ID in .env.local.
+    // If ID not available, re-run pnpm connect-relay to get it.
+    return Promise.reject(
+      new Error(
+        'Updating by secret is not supported. Use subscriberId instead. ' +
+        'Run pnpm connect-relay again to save RELAY_SUBSCRIBER_ID to .env.local.',
+      ),
+    );
+  }
+
   async deleteSubscriber(subscriberId: string): Promise<void> {
     await this.client.delete({
       TableName: this.tableName,
@@ -160,6 +197,7 @@ export class SubscriberRegistry {
       subscriberSecret: item.subscriberSecret as string,
       registeredAt: item.registeredAt as string,
       lastSeenAt: item.lastSeenAt as string,
+      lastWebhookAt: item.lastWebhookAt as string | undefined,
       version: item.version as number,
     };
   }
