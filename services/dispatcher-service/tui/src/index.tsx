@@ -648,18 +648,23 @@ function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
 }
 
 async function main(): Promise<void> {
+  let rendererInstance: Awaited<ReturnType<typeof createCliRenderer>> | null = null;
+
   const handleShutdown = (): void => {
+    if (rendererInstance) {
+      rendererInstance.destroy();
+    }
     process.exit(0);
   };
 
   const mountApp = async (): Promise<void> => {
-    const renderer = await createCliRenderer({ useMouse: true });
-    const root = createRoot(renderer);
+    rendererInstance = await createCliRenderer({ useMouse: true });
+    const root = createRoot(rendererInstance);
     root.render(
       <ThemeProvider>
         <App
           onExit={handleShutdown}
-          onRunRelayScript={(script, args) => runRelayScript(renderer, script, args)}
+          onRunRelayScript={(script, args) => runRelayScript(rendererInstance!, script, args)}
         />
       </ThemeProvider>,
     );
