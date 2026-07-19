@@ -1,12 +1,12 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { Request, Response } from 'express';
+import { FastifyRequest, FastifyReply } from 'fastify';
 import { randomBytes } from 'crypto';
 import { requestContextManager, RequestContext } from './request-context';
 
 export const REQUEST_ID_HEADER = 'X-Request-Id';
-export const CORRELATION_ID_HEADER = 'X-Correlation-Id';
+const CORRELATION_ID_HEADER = 'X-Correlation-Id';
 
 function generateRequestId(): string {
   return randomBytes(8).toString('hex');
@@ -15,18 +15,19 @@ function generateRequestId(): string {
 @Injectable()
 export class RequestIdInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const request = context.switchToHttp().getRequest<Request>();
-    const response = context.switchToHttp().getResponse<Response>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    const response = context.switchToHttp().getResponse<FastifyReply>();
 
     // Extract or generate request ID
-    const requestId = (request.get(REQUEST_ID_HEADER) as string) || generateRequestId();
+    const requestId = (request.headers[REQUEST_ID_HEADER.toLowerCase()] as string) || generateRequestId();
 
     // Extract correlation ID from incoming request (for distributed tracing)
-    const correlationId = (request.get(CORRELATION_ID_HEADER) as string) || requestId;
+    const correlationId =
+      (request.headers[CORRELATION_ID_HEADER.toLowerCase()] as string) || requestId;
 
     // Set response headers
-    response.setHeader(REQUEST_ID_HEADER, requestId);
-    response.setHeader(CORRELATION_ID_HEADER, correlationId);
+    response.header(REQUEST_ID_HEADER, requestId);
+    response.header(CORRELATION_ID_HEADER, correlationId);
 
     // Create and store request context
     const requestContext: RequestContext = {

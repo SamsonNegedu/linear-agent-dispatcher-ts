@@ -6,7 +6,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { FastifyRequest } from 'fastify';
 
 @Injectable()
 export class AdminAuthGuard implements CanActivate {
@@ -20,7 +20,7 @@ export class AdminAuthGuard implements CanActivate {
       throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
     }
 
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
     const token = request.headers['x-admin-token'];
 
     if (!token || token !== adminToken) {

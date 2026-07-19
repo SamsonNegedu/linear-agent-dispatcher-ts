@@ -18,17 +18,3 @@ export class RecentDuplicateRunError extends Error {
     this.name = 'RecentDuplicateRunError';
   }
 }
-
-export class DailyCapError extends Error {
-  constructor(provider: string) {
-    super(`Daily run cap exceeded for provider: ${provider}`);
-    this.name = 'DailyCapError';
-  }
-}
-
-export class NoSessionToResumeError extends Error {
-  constructor(issueId: string) {
-    super(`No session to resume for issue: ${issueId}`);
-    this.name = 'NoSessionToResumeError';
-  }
-}

@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Param,
   Query,
   Body,
   HttpException,
@@ -103,6 +104,29 @@ export class SubscriberController {
   }
 
   /**
+   * GET /subscribers/:id
+   * Lightweight existence check used by dispatcher-service to verify a
+   * subscriber it holds credentials for is still registered in the relay
+   * (e.g. hasn't been reaped by deleteStaleSubscribers). Deliberately omits
+   * subscriberSecret and localEndpoint from the response.
+   */
+  @Get(':id')
+  async getById(@Param('id') id: string) {
+    const subscriber = await this.subscriberService.getSubscriber(id);
+    if (!subscriber) {
+      throw new HttpException('Subscriber not found', HttpStatus.NOT_FOUND);
+    }
+
+    return {
+      subscriberId: subscriber.subscriberId,
+      teamKey: subscriber.teamKey,
+      registeredAt: subscriber.registeredAt,
+      lastSeenAt: subscriber.lastSeenAt,
+      lastWebhookAt: subscriber.lastWebhookAt || null,
+    };
+  }
+
+  /**
    * POST /subscribers/register
    * Register a new subscriber or update existing
    * Body: { linearUserId, teamKey, localEndpoint, domains, subscriberSecret, subscriberId? }
@@ -125,8 +149,7 @@ export class SubscriberController {
     }
 
     try {
-      const subscriberId =
-        dto.subscriberId || buildSubscriberId(teamKey, linearUserId, localEndpoint);
+      const subscriberId = dto.subscriberId || buildSubscriberId(teamKey, linearUserId);
 
       await this.subscriberService.registerSubscriber(
         subscriberId,

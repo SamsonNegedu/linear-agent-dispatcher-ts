@@ -47,9 +47,11 @@ export class ConfigValidatorService implements OnModuleInit {
 
     // Report errors
     if (errors.length > 0) {
-      // The Nest Logger is silenced (logger: false in main.ts), so the individual
-      // logger.error() lines below never reach the console. Include the actual
-      // messages in the thrown error itself so they aren't lost.
+      // Logged individually below (Nest's default logger is active here —
+      // nothing disables it), and also included in the thrown Error's
+      // message so main.ts's top-level `.catch(error => console.error(...))`
+      // shows the full list too, since that path runs independently of
+      // whatever the Nest Logger did.
       this.logger.error('Configuration validation failed:');
       errors.forEach((error) => this.logger.error(`  [ERROR] ${error}`));
       throw new Error(

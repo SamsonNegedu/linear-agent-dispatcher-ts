@@ -1,8 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import type { IEntryNestModule } from '@nestjs/core/nest-factory';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import express from 'express';
-import serverlessExpress from '@codegenie/serverless-express';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import awsLambdaFastify from '@fastify/aws-lambda';
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2, Context, Callback } from 'aws-lambda';
 import { registerInterceptors, type RegisterInterceptorsOptions } from './interceptors';
 
@@ -25,12 +24,18 @@ export interface ApiGatewayServiceConfig {
   interceptors?: RegisterInterceptorsOptions;
 }
 
+type LambdaProxyHandler = (
+  event: APIGatewayProxyEventV2,
+  context: Context,
+  callback?: Callback<APIGatewayProxyResultV2>,
+) => Promise<APIGatewayProxyResultV2>;
+
 /**
  * Service class that bootstraps a NestJS application and handles Lambda events
  * Manages app initialization with singleton caching
  */
 export class ApiGatewayService {
-  private app: express.Application | null = null;
+  private proxy: LambdaProxyHandler | null = null;
   private readonly config: ApiGatewayServiceConfig;
   private readonly logger: Console | { log: (msg: string) => void };
 
@@ -40,18 +45,17 @@ export class ApiGatewayService {
   }
 
   /**
-   * Initialize or return cached NestJS app
+   * Initialize or return cached Lambda proxy handler
    */
-  private async getApp(): Promise<express.Application> {
-    if (!this.app) {
+  private async getProxy(): Promise<LambdaProxyHandler> {
+    if (!this.proxy) {
       this.logger.log('[API Gateway] Bootstrapping NestJS application...');
 
-      // Create Express app
-      const expressApp = express();
-
-      // Create NestJS app with Express adapter
-      const adapter = new ExpressAdapter(expressApp);
-      const nestApp = await NestFactory.create(this.config.module, adapter);
+      const adapter = new FastifyAdapter();
+      const nestApp = await NestFactory.create<NestFastifyApplication>(
+        this.config.module,
+        adapter,
+      );
 
       // Set global prefix if provided
       if (this.config.globalPrefix) {
@@ -63,12 +67,13 @@ export class ApiGatewayService {
 
       // Initialize the app
       await nestApp.init();
+      await nestApp.getHttpAdapter().getInstance().ready();
 
       this.logger.log('[API Gateway] NestJS application initialized');
 
-      this.app = expressApp;
+      this.proxy = awsLambdaFastify(nestApp.getHttpAdapter().getInstance());
     }
-    return this.app;
+    return this.proxy;
   }
 
   /**
@@ -80,10 +85,8 @@ export class ApiGatewayService {
     callback?: Callback<APIGatewayProxyResultV2>,
   ): Promise<APIGatewayProxyResultV2> {
     try {
-      const expressApp = await this.getApp();
-      const handler = serverlessExpress({ app: expressApp });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument
-      return handler(event, context, callback as any);
+      const proxy = await this.getProxy();
+      return proxy(event, context, callback);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.log(`[API Gateway] Handler error: ${errorMsg}`);

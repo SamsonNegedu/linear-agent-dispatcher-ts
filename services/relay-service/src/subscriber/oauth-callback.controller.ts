@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
 import { Controller, Get, Query, Res, HttpException, HttpStatus, Logger } from '@nestjs/common';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import { SubscriberService, buildSubscriberId } from './subscriber.service';
 import { OAuthService } from './oauth.service';
 
@@ -26,7 +26,7 @@ export class OAuthCallbackController {
   async handleCallback(
     @Query('code') code: string | undefined,
     @Query('state') state: string | undefined,
-    @Res() res: Response,
+    @Res() res: FastifyReply,
   ) {
     if (!code || !state) {
       throw new HttpException('Missing code or state parameter', HttpStatus.BAD_REQUEST);
@@ -62,7 +62,7 @@ export class OAuthCallbackController {
       const teamRegistrations = await Promise.all(
         userInfo.teams.map(async (team: { id: string; key: string; name: string }) => {
           const teamKey = team.key;
-          const subscriberId = buildSubscriberId(teamKey, userInfo.linearUserId, localEndpoint);
+          const subscriberId = buildSubscriberId(teamKey, userInfo.linearUserId);
 
           await this.subscriberService.registerSubscriber(
             subscriberId,
@@ -90,15 +90,20 @@ export class OAuthCallbackController {
       // If a local CLI listener asked to be notified (connect-relay.ts), redirect
       // the browser there with the result so the CLI can finish automatically
       // instead of requiring the user to copy the secret out of this JSON by hand.
+      //
+      // Status code must be explicit: NestJS sets the reply's status to 200 before
+      // this handler ever runs, and Fastify's reply.redirect(url) — unlike
+      // Express's res.redirect(url) — reuses whatever status is already set
+      // instead of defaulting to 302 when one wasn't passed explicitly.
       if (cliCallbackUrl) {
         const redirectUrl = new URL(cliCallbackUrl);
         redirectUrl.searchParams.set('secret', subscriberSecret);
         redirectUrl.searchParams.set('teams', JSON.stringify(teamRegistrations));
-        res.redirect(redirectUrl.toString());
+        res.redirect(redirectUrl.toString(), HttpStatus.FOUND);
         return;
       }
 
-      res.json(result);
+      res.send(result);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`OAuth callback error: ${errorMsg}`);

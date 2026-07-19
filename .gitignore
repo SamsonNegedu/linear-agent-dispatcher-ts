@@ -63,6 +63,6 @@ coverage/
 *.orig
 
 # Personal configs
-repos.config.json
+routing.config.json
 
 *.db

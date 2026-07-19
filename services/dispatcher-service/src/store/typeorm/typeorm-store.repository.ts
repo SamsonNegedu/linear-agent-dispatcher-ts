@@ -1,15 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository, LessThan, MoreThanOrEqual } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { RunEntity } from './run.entity';
 import { ProcessedWebhookEntity } from './processed-webhook.entity';
 import type { IStoreRepository, Run, EnqueueRunInput, CompleteRunInput } from '../store.interfaces';
-import {
-  DuplicatePayloadError,
-  ActiveRunError,
-  RecentDuplicateRunError,
-  DailyCapError,
-} from '../store.errors';
+import { DuplicatePayloadError, ActiveRunError, RecentDuplicateRunError } from '../store.errors';
 
 @Injectable()
 export class TypeORMStoreRepository implements IStoreRepository {
@@ -42,9 +37,8 @@ export class TypeORMStoreRepository implements IStoreRepository {
       throw new ActiveRunError(input.issueId);
     }
 
-    // 3. Check for recent duplicate run (within dedupeWindow, same domain/skill)
-    const dedupeWindow = input.dedupeWindow || 60000;
-    const cutoff = new Date(Date.now() - dedupeWindow);
+    // 3. Check for recent duplicate run (within dedupeWindowMs, same domain/skill)
+    const cutoff = new Date(Date.now() - input.dedupeWindowMs);
     const recentRuns = await this.runRepository.find({
       where: {
         provider: input.provider,
@@ -56,27 +50,13 @@ export class TypeORMStoreRepository implements IStoreRepository {
       take: 1,
     });
     if (recentRuns.length > 0 && recentRuns[0].startedAt > cutoff) {
-      throw new RecentDuplicateRunError(input.issueId, dedupeWindow);
+      throw new RecentDuplicateRunError(input.issueId, input.dedupeWindowMs);
     }
 
-    // 4. Check daily run cap (runs started today)
-    const dailyRunCap = input.dailyRunCap || 10;
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayRuns = await this.runRepository.count({
-      where: {
-        provider: input.provider,
-        startedAt: MoreThanOrEqual(todayStart),
-      },
-    });
-    if (todayRuns >= dailyRunCap) {
-      throw new DailyCapError(input.provider);
-    }
-
-    // 5. Create run in transaction
+    // 4. Create run in transaction
     return this.dataSource.transaction(async (manager) => {
       const run = new RunEntity();
-      run.id = uuidv4();
+      run.id = randomUUID();
       run.provider = input.provider;
       run.issueId = input.issueId;
       run.issueIdentifier = input.issueIdentifier;

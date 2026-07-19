@@ -11,6 +11,9 @@
   "exports": {
     ".": "./dist/index.js"
   },
+  "dependencies": {
+    "@linear/sdk": "^88.2.0"
+  },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "typescript": "^5.3.3"

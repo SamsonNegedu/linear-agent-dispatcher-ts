@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { signWebhookPayload } from '@webhook-verify/core';
 import type { VerifiedEvent } from '@webhook-verify/core';
 
@@ -85,9 +85,12 @@ function createVerifiedEvent(args: CLIArgs): VerifiedEvent {
   const issueId = args.issueId.includes('-') ? args.issueId : `TEST-${args.issueId}`;
   const issueIdentifier = issueId;
 
+  const timestamp = Date.now();
+
   return {
-    webhookId: uuidv4(),
-    timestamp: Date.now(),
+    webhookId: randomUUID(),
+    idempotencyKey: `issue:${issueId}:update:${timestamp}`,
+    timestamp,
     teamId: `team_${args.teamKey || 'default'}`,
     teamKey: args.teamKey || 'DEFAULT',
     assigneeId: `user_test_${Date.now()}`,

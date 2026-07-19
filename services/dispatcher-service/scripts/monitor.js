@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const dispatcherDir = path.join(__dirname, '..');
-const tuiDir = path.join(dispatcherDir, 'tui');
+const tuiDir = path.join(dispatcherDir, '..', '..', 'packages', 'monitor-tui');
 const logsDir = path.join(dispatcherDir, 'logs');
 const logFile = path.join(logsDir, 'server.log');
 const port = process.env.PORT || '3000';

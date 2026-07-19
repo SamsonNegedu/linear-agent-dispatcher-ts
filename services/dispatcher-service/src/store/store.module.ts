@@ -5,6 +5,7 @@ import { RunEntity } from './typeorm/run.entity';
 import { ProcessedWebhookEntity } from './typeorm/processed-webhook.entity';
 import { WebhookQueueEntity } from './typeorm/webhook-queue.entity';
 import { TypeORMStoreRepository } from './typeorm/typeorm-store.repository';
+import { StaleRunReconciliationService } from './stale-run-reconciliation.service';
 import type { DispatcherConfig } from '../config/config';
 
 const storeProvider: Provider = {
@@ -27,7 +28,7 @@ const storeProvider: Provider = {
     }),
     TypeOrmModule.forFeature([RunEntity, ProcessedWebhookEntity, WebhookQueueEntity]),
   ],
-  providers: [storeProvider],
+  providers: [storeProvider, StaleRunReconciliationService],
   exports: [storeProvider],
 })
 export class StoreModule {}

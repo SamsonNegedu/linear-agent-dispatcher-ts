@@ -7,9 +7,9 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { Request, Response } from 'express';
+import { FastifyRequest, FastifyReply } from 'fastify';
 
-export interface ErrorResponse {
+interface ErrorResponse {
   statusCode: number;
   message: string;
   error?: string;
@@ -20,8 +20,8 @@ export interface ErrorResponse {
 @Injectable()
 export class ErrorInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const request = context.switchToHttp().getRequest<Request>();
-    const response = context.switchToHttp().getResponse<Response>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    const response = context.switchToHttp().getResponse<FastifyReply>();
 
     return next.handle().pipe(
       catchError((error) => {
@@ -50,7 +50,7 @@ export class ErrorInterceptor implements NestInterceptor {
           errorResponse.error = error.constructor.name;
         }
 
-        response.status(errorResponse.statusCode).json(errorResponse);
+        response.code(errorResponse.statusCode).send(errorResponse);
 
         throw error;
       }),

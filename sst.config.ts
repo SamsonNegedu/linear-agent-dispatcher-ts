@@ -1,6 +1,5 @@
 import { SSTConfig } from 'sst';
 import { RelayService } from './infra/relay-service';
-import { DispatcherService } from './infra/dispatcher-service';
 
 export default {
   config(_input) {
@@ -10,23 +9,10 @@ export default {
     };
   },
   stacks(app) {
-    // Environment modes:
-    // - production: RelayService only (cloud relay)
-    // - development: DispatcherService only (local development)
-    // - testing: Both services (full local testing)
-    const mode = process.env.SST_MODE || (app.stage === 'prod' ? 'production' : 'development');
-
-    if (mode === 'production' || app.stage === 'prod') {
-      // Production: only the cloud relay
-      app.stack(RelayService);
-    } else if (mode === 'testing') {
-      // Local testing: both services
-      app.stack(RelayService);
-      app.stack(DispatcherService);
-    } else {
-      // Development (default): only dispatcher
-      // Dispatcher connects to remote relay via RELAY_URL env var
-      app.stack(DispatcherService);
-    }
+    // The relay is the only serverless piece: a cloud Lambda that fans
+    // webhooks out to dispatchers. The dispatcher itself always runs as a
+    // standalone local NestJS server (see services/dispatcher-service/src/main.ts),
+    // not as a Lambda — it connects out to this relay via RELAY_URL.
+    app.stack(RelayService);
   },
 } satisfies SSTConfig;

@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
-import { Request, Response } from 'express';
+import { FastifyRequest, FastifyReply } from 'fastify';
 import { requestContextManager } from './request-context';
 
 export interface LoggerLike {
@@ -22,7 +22,7 @@ export interface LoggingConfig {
   logResponseBody?: boolean;
 }
 
-const DEFAULT_SKIP_PATHS = ['/health', '/healthz', '/ready', '/metrics', '/ping', '/monitor'];
+const DEFAULT_SKIP_PATHS = ['/health', '/healthz', '/ready', '/metrics', '/ping', '/monitor', '/status'];
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -35,8 +35,8 @@ export class LoggingInterceptor implements NestInterceptor {
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const request = context.switchToHttp().getRequest<Request>();
-    const response = context.switchToHttp().getResponse<Response>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    const response = context.switchToHttp().getResponse<FastifyReply>();
 
     const { method, url } = request;
     const startTime = Date.now();

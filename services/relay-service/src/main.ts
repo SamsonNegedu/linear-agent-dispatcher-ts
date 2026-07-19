@@ -1,5 +1,6 @@
 import './load-env';
 import { NestFactory } from '@nestjs/core';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { RelayModule } from './relay.module';
 import { Logger } from '@nestjs/common';
 import { loadRelayConfig } from './config/relay-config';
@@ -10,13 +11,17 @@ async function bootstrap() {
   try {
     loadRelayConfig();
 
-    const app = await NestFactory.create(RelayModule, {
-      rawBody: true,
-      // Without this, Nest's default teardown calls process.exit(1) directly on any
-      // init failure (e.g. onModuleInit throwing), bypassing this try/catch entirely
-      // and exiting with no error output at all.
-      abortOnError: false,
-    });
+    const app = await NestFactory.create<NestFastifyApplication>(
+      RelayModule,
+      new FastifyAdapter(),
+      {
+        rawBody: true,
+        // Without this, Nest's default teardown calls process.exit(1) directly on any
+        // init failure (e.g. onModuleInit throwing), bypassing this try/catch entirely
+        // and exiting with no error output at all.
+        abortOnError: false,
+      },
+    );
 
     const port = process.env.PORT || 3001;
 

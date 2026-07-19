@@ -2,12 +2,17 @@ import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Inde
 
 @Entity('webhook_queue')
 @Index(['status', 'createdAt'])
-@Index(['webhookId'], { unique: true })
+@Index(['idempotencyKey'], { unique: true })
 export class WebhookQueueEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id!: string;
 
-  @Column('varchar', { length: 255, unique: true })
+  @Column('varchar', { length: 255 })
+  idempotencyKey!: string;
+
+  // Subscription/session ID, kept for reference/debugging only — repeats
+  // across distinct events so it must never carry a uniqueness constraint.
+  @Column('varchar', { length: 255 })
   webhookId!: string;
 
   @Column('text')
@@ -15,9 +20,6 @@ export class WebhookQueueEntity {
 
   @Column('varchar', { length: 20, default: 'queued' })
   status!: 'queued' | 'processing' | 'failed';
-
-  @Column('int', { default: 0 })
-  attempts!: number;
 
   @Column('text', { nullable: true })
   lastError?: string;

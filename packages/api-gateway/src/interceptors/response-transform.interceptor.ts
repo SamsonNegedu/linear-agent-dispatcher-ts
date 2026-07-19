@@ -1,7 +1,7 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Response } from 'express';
+import { FastifyReply } from 'fastify';
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -13,7 +13,7 @@ export interface ApiResponse<T = unknown> {
 @Injectable()
 export class ResponseTransformInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponse> {
-    const response = context.switchToHttp().getResponse<Response>();
+    const response = context.switchToHttp().getResponse<FastifyReply>();
 
     return next.handle().pipe(
       map((data) => {

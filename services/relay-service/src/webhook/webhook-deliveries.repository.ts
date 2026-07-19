@@ -1,5 +1,5 @@
 import { DynamoClient } from '@dynamodb/client';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { WebhookDeliveryRecord } from './types';
 
 // Single-table design: deliveries share the relay table with subscribers
@@ -34,7 +34,7 @@ export class WebhookDeliveries {
     issueIdentifier: string,
     linearAssigneeId?: string,
   ): Promise<string> {
-    const deliveryId = uuidv4();
+    const deliveryId = randomUUID();
     const now = new Date().toISOString();
     const ttl = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // 30 days
 

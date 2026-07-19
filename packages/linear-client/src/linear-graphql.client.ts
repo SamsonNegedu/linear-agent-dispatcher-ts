@@ -1,74 +1,52 @@
+import { LinearClient } from '@linear/sdk';
 import type {
   ActivityType,
   LinearUserInfo,
   ActivityCreateResponse,
   IssueLabelsResponse,
+  IssueContext,
   LinearClientLogger,
 } from './types.js';
 
 /**
  * Below this many webhook-supplied labels, treat the webhook payload as incomplete
- * and fetch the full label set via GraphQL. Real issues have domain + mode labels
+ * and fetch the full label set via the Linear API. Real issues have domain + mode labels
  * (>=2), so fewer than that means the webhook likely missed updates.
  */
 const MIN_LABEL_COUNT_FOR_FALLBACK = 2;
 
 /**
- * Shared Linear GraphQL client for both relay and dispatcher services.
- * Handles all GraphQL queries and mutations for Linear API interactions.
+ * Shared Linear API client for both relay and dispatcher services.
+ * Wraps @linear/sdk for issue/activity/comment operations used by webhook routing.
  */
 export class LinearGraphQLClient {
-  private readonly apiEndpoint = 'https://api.linear.app/graphql';
-  private readonly requestTimeoutMs = 10000;
+  private readonly client: LinearClient;
 
   constructor(
     private readonly apiKey: string,
     private readonly logger?: LinearClientLogger,
-  ) {}
+  ) {
+    this.client = new LinearClient({ apiKey: this.apiKey });
+  }
 
   /**
    * Get current user info and teams from Linear
    * Used during OAuth flow in relay-service
    */
   async getUserInfo(accessToken: string): Promise<LinearUserInfo> {
-    const query = `query {
-      viewer {
-        id
-        email
-        teams {
-          edges {
-            node {
-              id
-              key
-              name
-            }
-          }
-        }
-      }
-    }`;
+    const client = accessToken ? new LinearClient({ accessToken }) : this.client;
 
-    const data = await this.executeGraphQL<{
-      viewer: {
-        id: string;
-        email?: string;
-        teams: {
-          edges: Array<{
-            node: {
-              id: string;
-              key: string;
-              name: string;
-            };
-          }>;
-        };
-      };
-    }>(query, undefined, accessToken);
-
-    const viewer = data.viewer;
-    if (!viewer || !viewer.id) {
+    const viewer = await client.viewer;
+    if (!viewer?.id) {
       throw new Error('Failed to extract user ID from Linear response');
     }
 
-    const teams = (viewer.teams?.edges || []).map((edge) => edge.node);
+    const teamsConnection = await viewer.teams();
+    const teams = teamsConnection.nodes.map((team) => ({
+      id: team.id,
+      key: team.key,
+      name: team.name,
+    }));
     if (teams.length === 0) {
       throw new Error('User has no Linear teams');
     }
@@ -93,45 +71,21 @@ export class LinearGraphQLClient {
       throw new Error('Missing required fields for activity creation');
     }
 
-    const mutation = `mutation AgentActivityCreate(
-      $agentSessionId: String!
-      $content: JSONObject!
-    ) {
-      agentActivityCreate(input: {
-        agentSessionId: $agentSessionId
-        content: $content
-      }) {
-        agentActivity {
-          id
-        }
-        success
-      }
-    }`;
-
     try {
-      const response = await this.executeGraphQL<{
-        agentActivityCreate?: {
-          agentActivity?: {
-            id: string;
-          };
-          success?: boolean;
-        };
-      }>(mutation, {
+      const response = await this.client.createAgentActivity({
         agentSessionId,
         content: { type, body },
       });
 
-      if (!response.agentActivityCreate?.agentActivity?.id) {
+      if (!response.agentActivityId) {
         throw new Error('No activity ID returned from Linear API');
       }
 
-      return {
-        id: response.agentActivityCreate.agentActivity.id,
-      };
+      return { id: response.agentActivityId };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger?.error(
-        `Failed to create activity (session=${agentSessionId}, type=${type}): ${errorMsg}`,
+        `Failed to create Linear agent activity: ${errorMsg} sessionId=${agentSessionId} type=${type}`,
       );
       throw error;
     }
@@ -150,73 +104,55 @@ export class LinearGraphQLClient {
       throw new Error('Missing required fields for comment creation');
     }
 
-    const mutation = `mutation CommentCreate(
-      $issueId: String!
-      $body: String!
-    ) {
-      commentCreate(input: {
-        issueId: $issueId
-        body: $body
-      }) {
-        comment {
-          id
-        }
-        success
-      }
-    }`;
-
     try {
-      const response = await this.executeGraphQL<{
-        commentCreate?: {
-          comment?: { id: string };
-          success?: boolean;
-        };
-      }>(mutation, { issueId, body });
+      const response = await this.client.createComment({ issueId, body });
 
-      if (!response.commentCreate?.comment?.id) {
+      if (!response.commentId) {
         throw new Error('No comment ID returned from Linear API');
       }
 
-      return { id: response.commentCreate.comment.id };
+      return { id: response.commentId };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.logger?.error(`Failed to create comment (issue=${issueId}): ${errorMsg}`);
+      this.logger?.error(`Failed to create Linear comment: ${errorMsg} issueId=${issueId}`);
       throw error;
     }
   }
 
   /**
-   * Resolve issue labels, falling back to a GraphQL fetch when the webhook-supplied
-   * labels look incomplete (fewer than MIN_LABEL_COUNT_FOR_FALLBACK). Webhooks are the
-   * primary source of truth (fast, already delivered); GraphQL is only queried when
-   * the webhook payload missed updates. Falls back to the webhook labels if the
-   * GraphQL fetch itself fails, so a Linear API outage doesn't block routing.
+   * Resolve issue labels and identifier, falling back to a Linear API fetch when the
+   * webhook-supplied labels look incomplete (fewer than MIN_LABEL_COUNT_FOR_FALLBACK).
+   * Webhooks are the primary source of truth (fast, already delivered); the API is only
+   * queried when the webhook payload missed updates. The identifier comes along for free
+   * on that same fetch — AgentSession webhooks never carry one, so this is the only place
+   * dispatcher-service can recover it without a second API round trip. Falls back to the
+   * webhook labels (and no identifier) if the API fetch itself fails, so a Linear API
+   * outage doesn't block routing.
    */
-  async resolveLabels(issueId: string, webhookLabels: string[]): Promise<string[]> {
+  async resolveIssueContext(issueId: string, webhookLabels: string[]): Promise<IssueContext> {
     if (webhookLabels.length >= MIN_LABEL_COUNT_FOR_FALLBACK) {
       this.logger?.debug(
-        `Using webhook labels (${webhookLabels.length} labels) for issue ${issueId}`,
+        `Webhook label count meets fallback threshold, skipping Linear API fetch labelCount=${webhookLabels.length} threshold=${MIN_LABEL_COUNT_FOR_FALLBACK} issueId=${issueId}`,
       );
-      return webhookLabels;
+      return { labels: webhookLabels };
     }
 
     this.logger?.log(
-      `Webhook has ${webhookLabels.length} labels (threshold: ${MIN_LABEL_COUNT_FOR_FALLBACK}), ` +
-        `fetching complete set via GraphQL for issue ${issueId}`,
+      `Webhook label count below fallback threshold, fetching full label set from Linear API labelCount=${webhookLabels.length} threshold=${MIN_LABEL_COUNT_FOR_FALLBACK} issueId=${issueId}`,
     );
 
     try {
       const result = await this.fetchIssueLabels(issueId);
       this.logger?.log(
-        `Resolved ${result.labels.length} labels via GraphQL (webhook had ${webhookLabels.length})`,
+        `Resolved labels via Linear API fallback resolvedCount=${result.labels.length} webhookCount=${webhookLabels.length} issueId=${issueId}`,
       );
-      return result.labels;
+      return { labels: result.labels, identifier: result.identifier };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger?.warn(
-        `GraphQL label fallback failed for issue ${issueId}, using webhook labels: ${errorMsg}`,
+        `Linear API label fallback failed, using webhook-supplied labels instead: ${errorMsg} issueId=${issueId}`,
       );
-      return webhookLabels;
+      return { labels: webhookLabels };
     }
   }
 
@@ -231,37 +167,17 @@ export class LinearGraphQLClient {
       throw new Error('issueId is required');
     }
 
-    const query = `
-      query GetIssueAssignee($id: String!) {
-        issue(id: $id) {
-          id
-          assignee {
-            id
-          }
-          team {
-            id
-            key
-          }
-        }
-      }
-    `;
-
-    const response = await this.executeGraphQL<{
-      issue?: {
-        id: string;
-        assignee?: { id: string };
-        team?: { id: string; key: string };
-      };
-    }>(query, { id: issueId });
-
-    if (!response.issue) {
+    const issue = await this.client.issue(issueId);
+    if (!issue) {
       return {};
     }
 
+    const [assignee, team] = await Promise.all([issue.assignee, issue.team]);
+
     return {
-      assigneeId: response.issue.assignee?.id,
-      teamId: response.issue.team?.id,
-      teamKey: response.issue.team?.key,
+      assigneeId: assignee?.id,
+      teamId: team?.id,
+      teamKey: team?.key,
     };
   }
 
@@ -274,93 +190,16 @@ export class LinearGraphQLClient {
       throw new Error('issueId is required');
     }
 
-    const query = `
-      query GetIssueLabels($id: String!) {
-        issue(id: $id) {
-          id
-          identifier
-          labels {
-            edges {
-              node {
-                id
-                name
-              }
-            }
-          }
-        }
-      }
-    `;
-
-    const response = await this.executeGraphQL<{
-      issue?: {
-        id: string;
-        identifier: string;
-        labels: {
-          edges: Array<{
-            node: {
-              id: string;
-              name: string;
-            };
-          }>;
-        };
-      };
-    }>(query, { id: issueId });
-
-    if (!response.issue) {
+    const issue = await this.client.issue(issueId);
+    if (!issue) {
       return { labels: [] };
     }
 
-    const labelNames = (response.issue.labels?.edges || [])
-      .map((edge) => edge.node?.name)
-      .filter((name: string | undefined): name is string => !!name && typeof name === 'string');
+    const labelsConnection = await issue.labels();
+    const labelNames = labelsConnection.nodes
+      .map((label) => label.name)
+      .filter((name): name is string => !!name && typeof name === 'string');
 
-    return { labels: labelNames };
-  }
-
-  /**
-   * Execute a GraphQL query or mutation against Linear API
-   * Includes timeout, error handling, and auth
-   */
-  private async executeGraphQL<T>(
-    query: string,
-    variables?: Record<string, unknown>,
-    accessToken?: string,
-  ): Promise<T> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    // Use provided access token (for OAuth flow) or stored API key
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
-    } else {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
-    }
-
-    const response = await fetch(this.apiEndpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        query,
-        variables,
-      }),
-      signal: AbortSignal.timeout(this.requestTimeoutMs),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Linear API HTTP ${response.status}: ${text.slice(0, 200)}`);
-    }
-
-    const data = (await response.json()) as {
-      data?: T;
-      errors?: Array<{ message: string }>;
-    };
-
-    if (data.errors) {
-      throw new Error(`GraphQL error: ${data.errors.map((e) => e.message).join('; ')}`);
-    }
-
-    return data.data || ({} as T);
+    return { labels: labelNames, identifier: issue.identifier };
   }
 }

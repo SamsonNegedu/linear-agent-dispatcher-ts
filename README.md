@@ -54,6 +54,14 @@ Every dispatcher sits behind a relay. The difference between solo dev and team d
 | `pnpm test-webhook` | Test dispatch without a Linear issue |
 | `pnpm dev` | Start both relay and dispatcher in dev mode |
 
+## Monitor TUI
+
+A terminal dashboard (`packages/monitor-tui`, built with Bun + React + [OpenTUI](https://github.com/anomalyco/opentui)) for watching dispatcher runs — active/queued/completed/failed tabs, live logs, and relay connection management.
+
+```bash
+cd packages/monitor-tui && bun start
+```
+
 ## Security
 
 Webhook verification (HMAC-SHA256) and relay authentication (Linear OAuth) are covered above. Beyond that:

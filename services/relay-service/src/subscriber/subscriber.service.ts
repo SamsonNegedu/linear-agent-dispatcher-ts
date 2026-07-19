@@ -1,23 +1,26 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { createHash } from 'crypto';
 import { SubscriberRegistry } from './subscriber-registry.repository';
 import { SubscriberRecord } from './types';
 import { SUBSCRIBER_REGISTRY_REPOSITORY } from './subscriber-registry.provider';
 
 /**
- * Deterministic subscriber ID for a (team, user, endpoint) triple.
- * Re-registering the same person from the same dispatcher endpoint must
- * overwrite their prior registration rather than piling up duplicates, while
- * still letting one person run dispatchers on multiple machines as distinct
- * subscriptions (each with its own localEndpoint).
+ * Deterministic subscriber ID for a (team, user) pair.
+ *
+ * Deliberately excludes localEndpoint: this ID is the upsert key
+ * (upsertSubscriber looks up by id, then overwrites in place), so the same
+ * person re-registering for the same team — even from a new localEndpoint,
+ * e.g. a fresh ngrok tunnel after restarting connect-relay — must resolve to
+ * the same row and update it, not create a second one. An earlier version
+ * hashed localEndpoint into the id, so any endpoint change produced a brand
+ * new subscriber instead of updating the existing one; both rows then stayed
+ * active with different secrets, and the relay fanned out to both — one
+ * accepted by the dispatcher's current secret, one always rejected with a
+ * signature mismatch. Concretely, one person only ever needs one active
+ * subscription per team regardless of how many machines/tunnels they've used
+ * over time — the localEndpoint on file is just "wherever to deliver next."
  */
-export function buildSubscriberId(
-  teamKey: string,
-  linearUserId: string,
-  localEndpoint: string,
-): string {
-  const endpointHash = createHash('sha256').update(localEndpoint).digest('hex').slice(0, 12);
-  return `${teamKey}:${linearUserId}:${endpointHash}`;
+export function buildSubscriberId(teamKey: string, linearUserId: string): string {
+  return `${teamKey}:${linearUserId}`;
 }
 
 @Injectable()
@@ -28,6 +31,10 @@ export class SubscriberService {
     @Inject(SUBSCRIBER_REGISTRY_REPOSITORY)
     private readonly registry: SubscriberRegistry,
   ) {}
+
+  async getSubscriber(subscriberId: string): Promise<SubscriberRecord | null> {
+    return this.registry.getSubscriber(subscriberId);
+  }
 
   async getSubscribersByTeamAndAssignee(
     teamKey: string,

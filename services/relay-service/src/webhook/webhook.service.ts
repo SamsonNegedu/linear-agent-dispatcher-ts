@@ -31,7 +31,7 @@ export class WebhookService {
   }
 
   async fanOutWebhook(webhook: VerifiedEvent, rawPayload: string): Promise<WebhookFanOutResult> {
-    const { webhookId, issueId, type } = webhook;
+    const { webhookId, issueId, issueIdentifier, idempotencyKey, type } = webhook;
     let { teamKey, assigneeId } = webhook;
 
     // For agent session webhooks without assignee info, try to fetch the issue for routing
@@ -60,7 +60,9 @@ export class WebhookService {
 
     // Skip if no assignee (unassigned issue or agent session with no issue fetch)
     if (!teamKey || !assigneeId) {
-      this.logger.warn(`Webhook ${webhookId} missing teamKey or assigneeId, skipping`);
+      this.logger.warn(
+        `webhook.skipped reason="missing teamKey or assigneeId" issue=${issueIdentifier || issueId} idempotencyKey=${idempotencyKey}`,
+      );
       return {
         webhookId,
         teamKey: teamKey || 'unknown',
@@ -108,11 +110,11 @@ export class WebhookService {
     // event name instead of interpolated mid-sentence, and failures carry
     // their actual reason instead of only appearing in a separate log line.
     this.logger.log(
-      `webhook.fanout webhookId=${webhookId} team=${teamKey} assignee=${assigneeId} delivered=${successful} failed=${failures.length} total=${subscribers.length}`,
+      `webhook.fanout idempotencyKey=${idempotencyKey} issue=${issueIdentifier || issueId} webhookId=${webhookId} team=${teamKey} assignee=${assigneeId} delivered=${successful} failed=${failures.length} total=${subscribers.length}`,
     );
     for (const failure of failures) {
       this.logger.warn(
-        `webhook.delivery.failed webhookId=${webhookId} subscriberId=${failure.subscriberId} endpoint=${failure.endpoint} reason="${failure.reason}"`,
+        `webhook.delivery.failed idempotencyKey=${idempotencyKey} issue=${issueIdentifier || issueId} subscriberId=${failure.subscriberId} endpoint=${failure.endpoint} reason="${failure.reason}"`,
       );
     }
 

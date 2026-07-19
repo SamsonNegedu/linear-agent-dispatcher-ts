@@ -4,7 +4,5 @@ export type {
   ActivityType,
   LinearUserInfo,
   LinearTokenResponse,
-  ActivityCreateResponse,
-  IssueLabelsResponse,
-  LinearClientLogger,
+  IssueContext,
 } from './types.js';

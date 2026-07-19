@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { INestApplication } from '@nestjs/common';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import {
@@ -13,15 +14,10 @@ import { loadConfig } from './config/config';
 
 const logger = new Logger('Bootstrap');
 
-export interface BootstrapResult {
-  app: INestApplication;
-  port: number;
-}
-
 export async function bootstrapServer(): Promise<{ app: INestApplication; port: number }> {
   const config = loadConfig();
 
-  const app: INestApplication = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
     rawBody: true, // enable raw body parsing for webhook signature verification
     abortOnError: false,
   });

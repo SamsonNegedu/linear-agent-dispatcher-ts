@@ -22,6 +22,12 @@ export interface ActivityCreateResponse {
 
 export interface IssueLabelsResponse {
   labels: string[];
+  identifier?: string;
+}
+
+export interface IssueContext {
+  labels: string[];
+  identifier?: string;
 }
 
 /**

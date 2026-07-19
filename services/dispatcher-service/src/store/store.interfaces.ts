@@ -32,8 +32,11 @@ export interface EnqueueRunInput {
   skill: string;
   triggerSource: string;
   providerSessionId?: string;
-  dailyRunCap?: number;
-  dedupeWindow?: number;
+  // Minimum time since the last run for this (issue, domain, skill) before a
+  // new one is rejected as a duplicate. Caller-provided (from
+  // RoutingConfigService's policy) rather than defaulted here, so there's a
+  // single source of truth for the value.
+  dedupeWindowMs: number;
 }
 
 export interface CompleteRunInput {
