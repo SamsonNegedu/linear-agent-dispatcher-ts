@@ -6,11 +6,9 @@ A production-grade NestJS/AWS serverless dispatcher that routes Linear webhooks 
 
 ## Key Features
 
-✅ **Portable data layer** — SQL (SQLite/PostgreSQL) or DynamoDB, config-based switching  
-✅ **Webhook relay** — One relay subscription for whole team; events routed by Linear user assignment  
-✅ **Security** — Linear OAuth, HMAC webhook signatures, audit logging  
-✅ **Local & team modes** — Solo dev or team deployment  
-✅ **Real-time** — HTTP webhook push from relay to dispatcher endpoints  
+- **Portable data layer** — SQL (SQLite/PostgreSQL) or DynamoDB, config-based switching
+- **Webhook relay** — One relay subscription for the whole team; events routed by Linear user assignment, secured with Linear OAuth and HMAC signatures
+- **Local & team modes** — run solo with a local relay, or share one relay deployment across a team
 
 ## Quick Start
 
@@ -58,8 +56,8 @@ Every dispatcher sits behind a relay. The difference between solo dev and team d
 
 ## Security
 
-- **Webhook verification**: HMAC-SHA256 (Linear → Relay → Dispatcher)
-- **Relay authentication**: Linear OAuth (user identity)
+Webhook verification (HMAC-SHA256) and relay authentication (Linear OAuth) are covered above. Beyond that:
+
 - **Audit trail**: All deliveries logged with 30-day retention (TTL)
 - **Safe by default**: Admin API disabled unless `ADMIN_API_TOKEN` is set
 
@@ -87,11 +85,10 @@ pnpm format           # Format + lint
 ```
 linear-agent-ts/
 ├── sst.config.ts              # Infrastructure as code (SST v2)
-├── packages/
-│   └── webhook-verify/        # Shared: HMAC verification, envelope parsing
+├── packages/                  # Shared workspace packages (api-gateway, linear-client,
+│                               #   dynamodb-client, webhook-verify, monitor-tui, ...)
 ├── services/
 │   ├── dispatcher-service/    # NestJS app: local dispatcher
 │   └── relay-service/         # Lambda handlers: serverless webhook relay
-└── infra/
-    └── relay-service.ts       # SST stack definition
+└── infra/                     # SST stack definitions
 ```

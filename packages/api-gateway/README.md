@@ -1,12 +1,10 @@
-# API Gateway - NestJS Serverless Express
+# API Gateway - NestJS Serverless Fastify
 
 A lightweight wrapper for bootstrapping NestJS applications with AWS Lambda and API Gateway, including production-ready interceptors for logging, error handling, timing, and request tracking.
 
 ## Features
 
-### Core Capabilities
-
-- **Serverless Express Integration** - Run NestJS on AWS Lambda with API Gateway v2
+- **Serverless Fastify Integration** - Run NestJS on AWS Lambda with API Gateway v2
 - **Global Interceptors** - Production-ready interceptors for cross-cutting concerns
 - **Request ID Tracking** - Automatic request ID and correlation ID generation
 - **Request Context** - AsyncLocalStorage-based context preservation through request lifecycle
@@ -15,8 +13,10 @@ A lightweight wrapper for bootstrapping NestJS applications with AWS Lambda and 
 
 ## Installation
 
+This is an internal workspace package — add it as a dependency in another workspace's `package.json`:
+
 ```bash
-npm install @api-gateway/serverless-express
+pnpm add @api-gateway/serverless-express --workspace
 ```
 
 ## Quick Start
@@ -66,14 +66,7 @@ All interceptors are enabled by default and can be disabled individually. **Erro
 
 ### 1. RequestIdInterceptor
 
-Automatically generates or extracts request IDs for distributed tracing.
-
-**Features:**
-
-- Generates unique request ID if not present
-- Extracts correlation ID from incoming headers
-- Preserves request context through AsyncLocalStorage
-- Adds response headers: `X-Request-Id` and `X-Correlation-Id`
+Automatically generates or extracts request IDs for distributed tracing, and preserves them through AsyncLocalStorage for the life of the request.
 
 **Usage:**
 
@@ -105,14 +98,7 @@ Standardizes error responses with consistent format.
 
 ### 3. TimingInterceptor
 
-Tracks request duration and detects slow requests.
-
-**Features:**
-
-- Adds `X-Response-Time` header to responses
-- Optional slow request logging (configured via threshold)
-- Skip paths to reduce noise
-- Works with custom loggers
+Tracks request duration, adds an `X-Response-Time` header, and optionally logs requests that exceed a threshold.
 
 **Configuration:**
 
@@ -126,14 +112,7 @@ timingConfig: {
 
 ### 4. LoggingInterceptor
 
-Structured request/response logging with request tracking.
-
-**Features:**
-
-- Logs all real requests (health checks `/health`, `/metrics`, etc. auto-skipped)
-- Includes request ID and correlation ID automatically
-- Optional response body logging
-- Works with any logger (Pino, Winston, etc.)
+Structured request/response logging with request tracking. Logs all real requests (health checks like `/health`, `/metrics` are auto-skipped), includes request/correlation IDs automatically, and works with any logger (Pino, Winston, etc.).
 
 **Log Output:**
 
@@ -255,14 +234,14 @@ const apiGatewayHandler = new ApiGatewayService({
 ### Request Headers (Recognized)
 
 | Header             | Purpose                                                         |
-| ------------------ | --------------------------------------------------------------- |
+| ------------------ | ----------------------------------------------------------------|
 | `X-Request-Id`     | Request identifier (auto-generated if not provided)             |
 | `X-Correlation-Id` | Correlation ID for distributed tracing (defaults to request ID) |
 
 ### Response Headers (Set)
 
 | Header             | Purpose                          |
-| ------------------ | -------------------------------- |
+| ------------------ | --------------------------------- |
 | `X-Request-Id`     | Echo of request ID               |
 | `X-Correlation-Id` | Echo of correlation ID           |
 | `X-Response-Time`  | Request duration in milliseconds |
@@ -309,18 +288,11 @@ interface RequestContext {
 }
 ```
 
-## Performance Considerations
-
-- **Skip high-traffic paths** - Reduce logging noise for /health, /metrics endpoints
-- **Set timing thresholds** - Only log slow requests to reduce log volume
-- **Request context is lightweight** - AsyncLocalStorage has minimal overhead
-- **Interceptor order matters** - RequestIdInterceptor must be first to set up context
-
 ## Troubleshooting
 
 ### Missing Request ID in Logs
 
-Ensure RequestIdInterceptor is registered first:
+Interceptor order matters — RequestIdInterceptor sets up the AsyncLocalStorage context that the others read from, so it must be registered first:
 
 ```typescript
 app.useGlobalInterceptors(
@@ -344,12 +316,3 @@ registerInterceptors(app, {
 ### Health Checks Not Being Logged
 
 This is intentional. Paths like `/health`, `/metrics`, `/ping`, `/healthz`, `/ready` are auto-skipped to reduce noise.
-
-## Best Practices
-
-1. **Always use request IDs** - They're essential for distributed tracing
-2. **Skip health/metrics endpoints** - Reduce log noise
-3. **Set reasonable thresholds** - 1-5 seconds for timing alerts
-4. **Use consistent logger** - Configure the same logger across all interceptors
-5. **Preserve correlation IDs** - Forward them to downstream services for tracing
-6. **Monitor response times** - Use the X-Response-Time header for alerting
