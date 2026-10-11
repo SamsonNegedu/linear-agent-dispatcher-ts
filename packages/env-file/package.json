@@ -1,0 +1,19 @@
+{
+  "name": "@linear-agent/env-file",
+  "version": "0.1.0",
+  "description": "Read and update .env files safely (quoting, comments, 0600 permissions)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test dist/*.test.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -7,7 +7,7 @@ import { Dot } from './Dot';
 export function FailedTab({ runs }: { runs: Run[] }): React.ReactNode {
   const colors = useTheme();
   return (
-    <box style={{ border: true, borderColor: colors.accent, flexDirection: 'column', flexGrow: 1 }}>
+    <box style={{ border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', flexGrow: 1 }}>
       {runs.length === 0 ? (
         <text fg={colors.muted}>No failed runs</text>
       ) : (

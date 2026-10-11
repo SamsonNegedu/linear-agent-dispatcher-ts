@@ -5,13 +5,13 @@ import { RoutingConfigService } from '../../config/routing-config.service';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
-import * as path from 'path';
+import { findSkill } from '../../config/skill-discovery';
 
 const execFileAsync = promisify(execFile);
 
 /**
  * Preflight validation runs on startup to catch configuration issues early.
- * Warns if repos are missing, claude binary doesn't exist, or skills are not configured.
+ * Fails if the claude binary, a repo path, or a mapped skill is missing (see `pnpm routes check`).
  * Skipped if PREFLIGHT_SKIP=1 (for CI/test environments).
  */
 @Injectable()
@@ -50,24 +50,27 @@ export class PreflightService implements OnModuleInit {
       errors.push(`Claude binary not found: ${this.config.executor.claudeBinPath}`);
     }
 
-    // 2. Check repos exist and have .claude/settings.json
-    const repos = this.routingConfig.getAllRepositories();
-    for (const repo of repos) {
+    // 2. Check every repo path exists and every mapped skill resolves on disk
+    for (const repo of this.routingConfig.getAllRepositories()) {
       if (!fs.existsSync(repo.path)) {
-        warnings.push(`Repo path does not exist: ${repo.path} (domain: ${repo.label})`);
+        errors.push(`[${repo.label}] repo path does not exist: ${repo.path}`);
         continue;
       }
 
-      const claudeSettingsPath = path.join(repo.path, '.claude', 'settings.json');
-      if (!fs.existsSync(claudeSettingsPath)) {
-        warnings.push(
-          `Missing .claude/settings.json in repo: ${repo.path} (domain: ${repo.label})`,
+      const mappings = Object.entries(repo.issueLabelToSkill ?? {});
+      if (mappings.length === 0) {
+        errors.push(
+          `[${repo.label}] no skills exposed. List some under "skills" in routing.config.json ` +
+            `(e.g. "skills": ["implement"]).`,
         );
       }
-
-      // Check if at least one issue label → skill mapping is configured
-      if (!repo.issueLabelToSkill || Object.keys(repo.issueLabelToSkill).length === 0) {
-        warnings.push(`No issueLabelToSkill configured for repo: ${repo.path} (domain: ${repo.label})`);
+      for (const [issueLabel, skill] of mappings) {
+        if (findSkill(repo.path, skill).status === 'missing') {
+          errors.push(
+            `[${repo.label}] ${issueLabel} -> /${skill}: skill not found ` +
+              `(expected ${repo.path}/.claude/skills/${skill}/SKILL.md)`,
+          );
+        }
       }
     }
 

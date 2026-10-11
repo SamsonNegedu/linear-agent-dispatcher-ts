@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import * as fs from 'fs';
 import * as path from 'path';
+import { existsSync } from 'fs';
+import { readEnvFile, updateEnvFile } from '@linear-agent/env-file';
 
 interface UpdateConfig {
   relayUrl: string;
@@ -38,15 +39,15 @@ function parseArgs(): UpdateConfig {
 
   // Load relay URL from .env.local or use default
   const envPath = path.join(process.cwd(), '.env.local');
-  if (!fs.existsSync(envPath)) {
+  if (!existsSync(envPath)) {
     console.error('❌ .env.local not found. Run pnpm connect-relay first.');
     process.exit(1);
   }
 
-  const envContent = fs.readFileSync(envPath, 'utf-8');
-  const relayUrl = config.relayUrl || extractEnvVar(envContent, 'RELAY_URL');
-  const subscriberSecret = extractEnvVar(envContent, 'RELAY_SUBSCRIBER_SECRET');
-  const subscriberId = extractEnvVar(envContent, 'RELAY_SUBSCRIBER_ID');
+  const env = readEnvFile(envPath);
+  const relayUrl = config.relayUrl || env.RELAY_URL;
+  const subscriberSecret = env.RELAY_SUBSCRIBER_SECRET;
+  const subscriberId = env.RELAY_SUBSCRIBER_ID;
 
   if (!relayUrl) {
     console.error(
@@ -70,30 +71,9 @@ function parseArgs(): UpdateConfig {
   };
 }
 
-function extractEnvVar(content: string, varName: string): string | null {
-  const match = content.match(new RegExp(`^${varName}=(.*)$`, 'm'));
-  return match ? match[1].trim() : null;
-}
-
 function saveDispatcherUrl(dispatcherUrl: string): void {
-  const envPath = path.join(process.cwd(), '.env.local');
   try {
-    const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-    const linePattern = /^#?\s*RELAY_DISPATCHER_URL=.*$/m;
-    const lines = existing.split('\n');
-    const index = lines.findIndex((line) => linePattern.test(line));
-
-    let updated: string;
-    if (index !== -1) {
-      lines[index] = `RELAY_DISPATCHER_URL=${dispatcherUrl}`;
-      updated = lines.join('\n');
-    } else {
-      const withNewline =
-        existing.length > 0 && !existing.endsWith('\n') ? existing + '\n' : existing;
-      updated = `${withNewline}RELAY_DISPATCHER_URL=${dispatcherUrl}\n`;
-    }
-
-    fs.writeFileSync(envPath, updated);
+    updateEnvFile(path.join(process.cwd(), '.env.local'), { RELAY_DISPATCHER_URL: dispatcherUrl });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`⚠️  Failed to persist RELAY_DISPATCHER_URL to .env.local: ${errorMsg}`);

@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
 import { signWebhookPayload } from '@webhook-verify/core';
-import type { VerifiedEvent } from '@webhook-verify/core';
+import type { NormalizedEvent } from '@webhook-verify/core';
 
 interface CLIArgs {
   issueId: string;
@@ -37,12 +37,14 @@ function parseArgs(): CLIArgs {
 
   if (!args.issueId || !args.label) {
     console.error(
-      'Usage: test-webhook --issue-id=<ID> --label=<LABEL> [--team-key=<KEY>] [--port=<PORT>] [--endpoint=<URL>]',
+      'Usage: test-webhook --issue-id=<ID> --label=<REPO>,<MODE> [--team-key=<KEY>] [--port=<PORT>] [--endpoint=<URL>]',
     );
     console.error('');
     console.error('Examples:');
-    console.error('  pnpm test-webhook -- --issue-id=LIN-123 --label=agent-implement');
-    console.error('  pnpm test-webhook -- --issue-id=LIN-456 --label=agent-plan --team-key=ENG');
+    console.error('  pnpm test-webhook -- --issue-id=LIN-123 --label=my-repo,agent-implement');
+    console.error('  pnpm test-webhook -- --issue-id=LIN-456 --label=my-repo,agent-plan --team-key=ENG');
+    console.error('');
+    console.error('--label takes the repo label and one mode label, comma-separated (see `pnpm routes`).');
     process.exit(1);
   }
 
@@ -81,27 +83,30 @@ function loadConfig() {
   };
 }
 
-function createVerifiedEvent(args: CLIArgs): VerifiedEvent {
+function createNormalizedEvent(args: CLIArgs): NormalizedEvent {
   const issueId = args.issueId.includes('-') ? args.issueId : `TEST-${args.issueId}`;
   const issueIdentifier = issueId;
+  const labels = args.label.split(',').map((l) => l.trim()).filter(Boolean);
 
   const timestamp = Date.now();
 
   return {
+    provider: 'linear',
+    kind: 'issue',
     webhookId: randomUUID(),
     idempotencyKey: `issue:${issueId}:update:${timestamp}`,
     timestamp,
-    teamId: `team_${args.teamKey || 'default'}`,
-    teamKey: args.teamKey || 'DEFAULT',
-    assigneeId: `user_test_${Date.now()}`,
+    organizationId: 'org_test',
     issueId,
     issueIdentifier,
-    labels: [args.label],
-    organizationId: 'org_test',
-    type: 'Issue',
+    ownerId: `user_test_${Date.now()}`,
+    routingKey: args.teamKey || 'DEFAULT',
+    routingTags: labels,
+    isTerminal: false,
     action: 'update',
+    changedFields: ['labelIds'],
     labelChange: {
-      added: [args.label],
+      added: labels,
       removed: [],
     },
     rawPayload: {},
@@ -109,7 +114,7 @@ function createVerifiedEvent(args: CLIArgs): VerifiedEvent {
 }
 
 async function sendWebhook(
-  event: VerifiedEvent,
+  event: NormalizedEvent,
   config: ReturnType<typeof loadConfig>,
 ): Promise<void> {
   const payload = JSON.stringify(event);
@@ -161,7 +166,7 @@ async function main() {
   try {
     const args = parseArgs();
     const config = loadConfig();
-    const event = createVerifiedEvent(args);
+    const event = createNormalizedEvent(args);
 
     console.log(
       `Sending test webhook for issue ${event.issueIdentifier} with label "${args.label}"...`,

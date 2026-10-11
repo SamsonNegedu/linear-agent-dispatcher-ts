@@ -17,6 +17,7 @@ export function LogsTab(): React.ReactNode {
     <box
       style={{
         border: true,
+        borderStyle: 'rounded',
         borderColor: colors.accent,
         flexDirection: 'column',
         width: '100%',

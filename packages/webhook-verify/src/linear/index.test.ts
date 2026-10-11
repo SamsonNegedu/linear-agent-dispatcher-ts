@@ -168,3 +168,20 @@ void test('shouldTriggerDispatch: always dispatches AgentSession events', () => 
   const decision = shouldTriggerDispatch(event);
   assert.equal(decision.shouldDispatch, true);
 });
+
+import * as crypto from 'crypto';
+import { verifyLinearSignature } from './index';
+
+test('verifyLinearSignature accepts a correct signature', () => {
+  const body = Buffer.from('{"a":1}');
+  const signature = crypto.createHmac('sha256', 'secret').update(body).digest('hex');
+  assert.equal(verifyLinearSignature(body, signature, 'secret'), true);
+});
+
+test('verifyLinearSignature rejects wrong, truncated or missing signatures without throwing', () => {
+  const body = Buffer.from('{"a":1}');
+  const signature = crypto.createHmac('sha256', 'secret').update(body).digest('hex');
+  assert.equal(verifyLinearSignature(body, signature, 'other-secret'), false);
+  assert.equal(verifyLinearSignature(body, signature.slice(0, 10), 'secret'), false);
+  assert.equal(verifyLinearSignature(body, undefined, 'secret'), false);
+});

@@ -4,6 +4,8 @@
 
 **Date:** 2026-07-17 (originally two ADRs: repo routing 2026-07-12, trigger semantics 2026-07-17 — merged, see history below)
 
+**Amended:** 2026-10-12 — the routing config is now a list of repos plus an explicit list of exposed skills (Stage 2), and preflight fails startup on a missing repo path or skill (Preflight Validation).
+
 ## Context
 
 The dispatcher receives every Linear webhook for a subscribed team and must
@@ -85,50 +87,53 @@ all," not "where does it go" — that's Stage 2.
 ### Stage 2: Where it routes
 
 Use Linear issue labels for routing:
-- **Domain labels** (e.g., `backend`, `frontend`) map to repository paths via `routing.config.json`
-- **Mode labels** (e.g., `agent-implement`, `agent-plan`) map to Claude skills
+- **Domain labels** map to repositories via `routing.config.json`. A repo's label
+  is its folder name unless the entry sets `label`.
+- **Mode labels** `agent-<name>` run the Claude skill `/<name>` in that repo — but
+  only for skills explicitly listed in `skills` (top-level, applying to every
+  repo, plus a repo's own `skills`). Nothing is exposed by default, so a label on
+  a Linear issue can never launch a skill the operator did not list.
+- `issueLabelToSkill` on a repo maps a label to a differently named skill
+  (`"agent-build": "implement"`).
 - Label names are keys; no string parsing
 
 Store routing configuration in `routing.config.json` (gitignored — each deployment
 has its own local repo paths; `routing.config.example.json` is the checked-in
-template):
+template). A repo is just a path unless something needs overriding:
 
 ```json
 {
+  "$schema": "./routing.config.schema.json",
   "policy": {
     "skipDoneIssues": false,
     "duplicateRunWindowMs": 60000
   },
+  "skills": ["implement", "fix-bug"],
   "repositories": [
-    {
-      "label": "backend",
-      "path": "./services/backend",
-      "issueLabelToSkill": {
-        "agent-implement": "linear-implement",
-        "agent-plan": "linear-plan"
-      }
-    },
-    {
-      "label": "frontend",
-      "path": "./services/frontend",
-      "issueLabelToSkill": {
-        "agent-implement": "linear-implement"
-      }
-    }
+    "~/code/backend",
+    { "path": "~/code/frontend", "skills": ["design-review"] }
   ]
 }
 ```
+
+The file is validated with a zod schema (`routing-schema.ts`); unknown keys,
+bad labels and duplicate repo labels are rejected at startup with the offending
+path. `pnpm routes` prints the resulting repo / label / skill table with a
+✓/✗ for each skill on disk, `pnpm routes check` exits non-zero on a problem,
+and `pnpm routes add <path>` registers a repo. The earlier format — a
+per-repo `issueLabelToSkill` map and no `skills` list — still loads, but no longer
+exposes anything on its own beyond the mappings it names.
 
 The top-level `policy` block is optional (each field defaults if omitted) and
 governs *whether* a dispatch happens at all, on top of Stage 1 — see
 "Dispatch Policy" under Implementation Details.
 
-`LabelValidationService.resolveRun()`:
+`LinearDispatchAdapter.resolveRouting()`:
 1. Check issue labels against repository keys in config — exactly one domain
    label required; zero or multiple matches is a validation error (posted as
    a Linear comment), there is no default repo to fall back to
 2. Find the mode label among the issue's remaining (non-domain) labels —
-   exactly one required for that repo's `issueLabelToSkill` map, same
+   exactly one required among the repo's exposed mode labels, same
    zero-or-multiple validation
 3. Invoke the corresponding Claude skill in the resolved repo directory
 
@@ -206,33 +211,36 @@ API key (`LinearGraphQLClient` is only constructed when one is present),
 ## Implementation Details
 
 - Load `routing.config.json` on startup; `RoutingConfigService` validates
-  structure (fail fast: missing/malformed `repositories` array, duplicate
-  labels, invalid label/mode format, malformed `policy`) — it does **not**
-  check that repo paths exist on disk; that's the preflight step below
+  structure against the zod schema (fail fast: missing/malformed `repositories`,
+  duplicate labels, invalid label/skill format, unknown keys, malformed
+  `policy`) — it does **not** check that repo paths or skills exist on disk;
+  that's the preflight step below
 - ExecutorService uses per-repo mutex to serialize runs (only one handler per repo at a time)
 
 ### Preflight Validation
 
-Config that resolves at startup but points at something broken (a `routing.config.json`
-entry with a repo path that doesn't exist, a missing `.claude/settings.json`)
-would otherwise only surface as an error on the *first webhook* for that
-repo — confusing to debug days after deployment. `PreflightService` runs on
+Config that resolves at startup but points at something broken (a repo path that
+doesn't exist, a listed skill the repo doesn't have) would otherwise only
+surface as an error on the *first webhook* for that repo — and, because runs are
+unattended, as a run that silently does nothing. `PreflightService` runs on
 dispatcher startup (unless `PREFLIGHT_SKIP=1`) and checks:
 
-1. The `claude` binary exists (`which <claudeBinPath>`) — **error**, fails
-   startup
-2. For each configured repo: the repo path exists on disk — **warning**
-3. For each configured repo: `.claude/settings.json` exists — **warning**
-   (skills are discovered by the `claude` CLI at runtime, not required for
-   startup)
-4. For each configured repo: at least one `issueLabelToSkill` entry is
-   configured — **warning**
+1. The `claude` binary exists (`which <claudeBinPath>`) — **error**
+2. For each configured repo: the repo path exists on disk — **error**
+3. For each configured repo: at least one skill is exposed — **error**
+4. For each exposed skill (and `issueLabelToSkill` target): it resolves to
+   `.claude/skills/<name>/SKILL.md` or `.claude/commands/<name>.md` in the repo
+   or the user's `~/.claude` — **error**. Plugin skills (`plugin:skill`) can't be
+   checked on disk and are skipped.
 5. A Linear API key is configured — informational log if present, else
    **warning** (activity posting is skipped without one)
 
-Only the binary check fails startup; everything else logs a warning and lets
-the dispatcher boot anyway, since a broken repo only affects webhooks routed
-to *that* repo.
+Any error fails startup with every problem listed together. This is a change
+from the original stance (only the binary check failed startup): a broken repo
+used to affect only its own webhooks, but a mapping that points at nothing is a
+configuration mistake the operator can fix in seconds, and finding it at boot
+beats finding it in a Linear comment. `pnpm routes check` runs the same
+path/skill check without starting the dispatcher.
 
 Implemented as `PreflightService implements OnModuleInit`, self-contained
 within `PreflightModule` — not orchestrated by any other module.

@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import type { SelectRenderable } from '@opentui/core';
 import { useTheme } from './theme-context';
+import { copyToClipboard } from './utils/clipboard';
+import { tabText } from './utils/tab-text';
+import { getConfig } from './utils/config';
+import { relayConnectionStatus } from './utils/relay-status';
 import { fetchMonitorSnapshot } from './services/monitor-api.service';
 import { useGlobalShortcuts } from './hooks/useGlobalShortcuts';
 import { TAB, TAB_NAMES, POLL_INTERVAL_MS, type TabName } from './constants';
@@ -12,6 +16,7 @@ import { RelayTab } from './components/RelayTab';
 import { RunsTab } from './components/RunsTab';
 import { CompletedTab } from './components/CompletedTab';
 import { FailedTab } from './components/FailedTab';
+import { NeedsInputTab } from './components/NeedsInputTab';
 
 export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
   const colors = useTheme();
@@ -21,10 +26,13 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
   const [queueRuns, setQueueRuns] = useState<Run[]>([]);
   const [completedRuns, setCompletedRuns] = useState<Run[]>([]);
   const [failedRuns, setFailedRuns] = useState<Run[]>([]);
+  const [needsInputRuns, setNeedsInputRuns] = useState<Run[]>([]);
   const [relayHealth, setRelayHealth] = useState<RelayHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [relayMode, setRelayMode] = useState<'idle' | 'connect' | 'update'>('idle');
+  const [toast, setToast] = useState<string | null>(null);
+  const [mouseOn, setMouseOn] = useState(true);
   const sidebarRef = useRef<SelectRenderable>(null);
   const renderer = useRenderer();
   const { height: terminalHeight } = useTerminalDimensions();
@@ -50,6 +58,7 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
         setQueueRuns(snapshot.queueRuns);
         setCompletedRuns(snapshot.completedRuns);
         setFailedRuns(snapshot.failedRuns);
+        setNeedsInputRuns(snapshot.needsInputRuns);
         setRelayHealth(snapshot.relayHealth);
         setLoading(false);
         setError(null);
@@ -73,16 +82,43 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
       setError('Restarting server...');
       setLoading(true);
     },
-    onRestartSettled: () => {
-      setError(null);
+    onRestartSettled: (restartError) => {
+      setError(restartError ? restartError.message : null);
       setLoading(false);
     },
   });
+
+  const showToast = (message: string): void => {
+    setToast(message);
+    setTimeout(() => setToast((current) => (current === message ? null : current)), 2500);
+  };
+
+  const copyCurrent = async (): Promise<void> => {
+    const selected = renderer.hasSelection ? renderer.getSelection()?.getSelectedText() : '';
+    const text =
+      selected ||
+      tabText(TAB_NAMES[currentTab], { summary, activeRuns, queueRuns, completedRuns, failedRuns, needsInputRuns, relayHealth });
+    if (!text) return showToast('Nothing to copy');
+    const ok = await copyToClipboard(text, (t) => renderer.copyToClipboardOSC52(t));
+    const what = selected ? 'selection' : `${TAB_NAMES[currentTab]} tab`;
+    showToast(ok ? `Copied ${what} (${text.split('\n').length} lines)` : 'Copy failed: no clipboard available');
+  };
 
   useKeyboard((key) => {
     if (relayMode !== 'idle') return;
     if (key.name === 'q') {
       onExit();
+      return;
+    }
+    if (key.name === 'y') {
+      void copyCurrent();
+      return;
+    }
+    if (key.name === 'm') {
+      const next = !renderer.useMouse;
+      renderer.useMouse = next;
+      setMouseOn(next);
+      showToast(next ? 'Mouse on (scroll/click). Terminal selection off' : 'Mouse off: select text with the mouse, Cmd+C');
       return;
     }
     const tabNum = parseInt(key.name, 10);
@@ -99,17 +135,26 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
       Logs: null,
       Relay: null,
       Runs: `${summary.counts.running}/${summary.counts.pending}`,
+      'Needs input': summary.counts.needs_input > 0 ? `${summary.counts.needs_input}` : null,
       Completed: `${summary.counts.succeeded}`,
       Failed: `${summary.counts.failed}`,
     }
-    : { Dashboard: null, Logs: null, Relay: null, Runs: null, Completed: null, Failed: null };
+    : {
+      Dashboard: null,
+      Logs: null,
+      Relay: null,
+      Runs: null,
+      'Needs input': null,
+      Completed: null,
+      Failed: null,
+    };
 
   const sidebarOptions = TAB_NAMES.map((name) => ({
     name: tabCounts[name] !== null ? `${name} (${tabCounts[name]})` : name,
     description: '',
   }));
 
-  const switchHint = `↑↓/1-${TAB_NAMES.length} switch · q quit · Ctrl+R restart`;
+  const switchHint = `↑↓/1-${TAB_NAMES.length} switch · y copy · m mouse ${mouseOn ? 'off' : 'on'} · q quit · Ctrl+R restart`;
 
   const footerHint = (): string => {
     if (relayMode !== 'idle') return "Enter confirm · Esc cancel";
@@ -118,15 +163,42 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
   };
 
   const contentReady = !loading && !error && summary !== null;
+  const relayStatus = relayConnectionStatus(getConfig().relayEnabled, relayHealth, colors);
 
   return (
     <box style={{ flexDirection: 'column', width: '100%', height: '100%' }}>
-      <box style={{ border: true, borderColor: colors.accent, paddingLeft: 1, paddingRight: 1 }}>
+      <box
+        style={{
+          border: true,
+          borderStyle: 'rounded',
+          borderColor: colors.accent,
+          paddingLeft: 1,
+          paddingRight: 1,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+        }}
+      >
         <text attributes={1}>DISPATCHER MONITOR</text>
+        {summary ? (
+          <text wrapMode="none" truncate>
+            <span fg={colors.running}>● {summary.counts.running} running</span>
+            {'  '}
+            <span fg={colors.pending}>● {summary.counts.pending} queued</span>
+            {'  '}
+            <span fg={colors.succeeded}>● {summary.counts.succeeded} done</span>
+            {'  '}
+            <span fg={colors.failed}>● {summary.counts.failed} failed</span>
+            {summary.counts.needs_input > 0 ? (
+              <span fg={colors.needs_input}>{'  '}● {summary.counts.needs_input} need input</span>
+            ) : null}
+            {'  '}
+            <span fg={relayStatus.color}>● relay: {relayStatus.label}</span>
+          </text>
+        ) : null}
       </box>
       <box style={{ flexDirection: 'row', height: contentHeight }}>
         <box
-          style={{ width: 22, height: contentHeight, border: true, borderColor: colors.accent, flexDirection: 'column', paddingLeft: 1, paddingRight: 1 }}
+          style={{ width: 22, height: contentHeight, border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', paddingLeft: 1, paddingRight: 1 }}
           onMouseDown={() => {
             if (!contentReady || relayMode !== 'idle') return;
             sidebarRef.current?.focus();
@@ -163,6 +235,7 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
                 />
               )}
               {currentTab === TAB.Runs && <RunsTab activeRuns={activeRuns} queueRuns={queueRuns} />}
+              {currentTab === TAB['Needs input'] && <NeedsInputTab runs={needsInputRuns} />}
               {currentTab === TAB.Completed && <CompletedTab runs={completedRuns} />}
               {currentTab === TAB.Failed && <FailedTab runs={failedRuns} />}
             </>
@@ -170,7 +243,7 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
         </box>
       </box>
       <box style={{ paddingLeft: 1 }}>
-        <text fg={colors.muted}>{contentReady ? footerHint() : ''}</text>
+        <text fg={toast ? colors.succeeded : colors.muted}>{toast ?? (contentReady ? footerHint() : '')}</text>
       </box>
     </box>
   );

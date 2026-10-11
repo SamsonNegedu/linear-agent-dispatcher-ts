@@ -1,12 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { IStoreRepository, Run } from '../../store/store.interfaces';
 import { RoutingConfigService } from '../../config/routing-config.service';
+import { findSkill } from '../../config/skill-discovery';
 
 interface RepoStatus {
   repoPath: string;
   domainLabel: string;
   description?: string;
-  issueLabelToSkill: Array<{ label: string; skill: string }>;
+  issueLabelToSkill: Array<{ label: string; skill: string; skillFound: boolean | null }>;
   runningCount: number;
   currentRuns: Array<{ issueIdentifier: string; issueTitle?: string }>;
 }
@@ -17,6 +18,7 @@ export interface MonitorSummary {
     running: number;
     succeeded: number;
     failed: number;
+    needs_input: number;
   };
   repos: RepoStatus[];
 }
@@ -39,7 +41,10 @@ export class MonitorService {
         domainLabel: repo.label,
         description: repo.description,
         issueLabelToSkill: repo.issueLabelToSkill
-          ? Object.entries(repo.issueLabelToSkill).map(([label, skill]) => ({ label, skill }))
+          ? Object.entries(repo.issueLabelToSkill).map(([label, skill]) => {
+              const { status } = findSkill(repo.path, skill);
+              return { label, skill, skillFound: status === 'unverifiable' ? null : status === 'found' };
+            })
           : [],
         runningCount: 0,
         currentRuns: [],
@@ -64,6 +69,7 @@ export class MonitorService {
         running: byStatus['running'] || 0,
         succeeded: byStatus['succeeded'] || 0,
         failed: byStatus['failed'] || 0,
+        needs_input: byStatus['needs_input'] || 0,
       },
       repos: Array.from(repoMap.values()),
     };

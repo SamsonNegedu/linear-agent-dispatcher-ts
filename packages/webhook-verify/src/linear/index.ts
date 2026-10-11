@@ -1,5 +1,12 @@
 import * as crypto from 'crypto';
 
+import { safeEqual } from '../core/safe-equal';
+import type { DispatchDecision } from '../core/types';
+
+export type { DispatchDecision } from '../core/types';
+export { validateTimestamp } from '../core/timestamp';
+export { LinearIngestAdapter } from './linear-ingest.adapter';
+
 // Linear-specific verification: HMAC signature, envelope parsing, timestamp validation
 
 export type WebhookType = 'Issue' | 'AgentSession';
@@ -41,11 +48,11 @@ export interface VerifiedEvent {
 
 export const verifyLinearSignature = (
   payload: Buffer,
-  signature: string,
+  signature: string | undefined,
   secret: string,
 ): boolean => {
   const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  return safeEqual(signature, expected);
 };
 
 export const parseLinearWebhook = (payload: unknown): VerifiedEvent => {
@@ -225,11 +232,6 @@ const parseAgentSessionWebhook = (data: Record<string, unknown>): VerifiedEvent 
   };
 };
 
-export const validateTimestamp = (timestamp: number, windowMs: number = 5 * 60 * 1000): boolean => {
-  const now = Date.now();
-  const diff = Math.abs(now - timestamp);
-  return diff <= windowMs;
-};
 
 // Linear's state.type enum: 'triage' | 'backlog' | 'unstarted' | 'started' |
 // 'completed' | 'canceled'. "Terminal" means the issue is done, one way or
@@ -238,11 +240,6 @@ const TERMINAL_STATE_TYPES = new Set(['completed', 'canceled']);
 
 export const isTerminalStateType = (stateType: string | undefined): boolean =>
   !!stateType && TERMINAL_STATE_TYPES.has(stateType);
-
-export interface DispatchDecision {
-  shouldDispatch: boolean;
-  reason: string;
-}
 
 /**
  * Decides whether a parsed webhook event should trigger a dispatch run.

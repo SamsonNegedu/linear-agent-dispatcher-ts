@@ -16,16 +16,23 @@ import {
   UpdateCommandOutput,
   DeleteCommandInput,
   QueryCommandOutput,
-  BatchWriteCommandOutput,
+  BatchGetCommandInput,
   BatchWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import { Key } from './types';
-import { chunkArray, formatUpdateExpression } from './utils';
+import { buildUpdateExpression, chunk } from './utils';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
 export { QueryCommandInput, QueryCommandOutput, PutCommandOutput } from '@aws-sdk/lib-dynamodb';
 export { NativeAttributeValue } from '@aws-sdk/util-dynamodb';
 
 const MAX_RETRIES = 5;
+// DynamoDB per-request limits
+const BATCH_GET_LIMIT = 100;
+const BATCH_WRITE_LIMIT = 25;
+
+/** DynamoDB reports "nothing left" as undefined or an empty object. */
+const nonEmpty = <T extends object>(value: T | undefined): T | undefined =>
+  value && Object.keys(value).length > 0 ? value : undefined;
 
 /**
  * Builds the DynamoDBClient config for local dev against DynamoDB Local
@@ -88,31 +95,32 @@ export class DynamoClient {
     if (!item) {
       return undefined;
     }
-    if (removeKeys) {
-      Object.keys(key).forEach((k) => delete item[k]);
+    if (!removeKeys) {
+      return item as T;
     }
-    return item as T;
+    const withoutKeys = { ...item };
+    Object.keys(key).forEach((k) => delete withoutKeys[k]);
+    return withoutKeys as T;
   }
 
   async batchGetItems<T>(table: string, keys: Key[]): Promise<T[]> {
-    const keysArray = keys.length > 100 ? chunkArray(keys) : [keys];
-    const batchResponse: T[] = [];
+    const results: T[] = [];
 
-    for (const chunk of keysArray) {
-      const RequestItems = {
-        [table]: {
-          Keys: chunk,
+    for (const keyChunk of chunk(keys, BATCH_GET_LIMIT)) {
+      // DynamoDB may return only part of a batch (throttling, size limits) and reports the
+      // rest as UnprocessedKeys; those must be re-requested or the items are silently lost.
+      await this.retryUnprocessed<BatchGetCommandInput['RequestItems']>(
+        'BatchGetItems',
+        { [table]: { Keys: keyChunk } },
+        async (requestItems) => {
+          const response = await this.docClient.send(new BatchGetCommand({ RequestItems: requestItems }));
+          results.push(...((response.Responses?.[table] ?? []) as T[]));
+          return nonEmpty(response.UnprocessedKeys);
         },
-      };
-
-      const response = await this.docClient.send(new BatchGetCommand({ RequestItems }));
-      const items = response.Responses;
-      if (items && items[table].length) {
-        batchResponse.push(...(items[table] as T[]));
-      }
+      );
     }
 
-    return batchResponse;
+    return results;
   }
 
   async putItem<T>(table: string, item: Partial<T>): Promise<PutCommandOutput> {
@@ -124,14 +132,16 @@ export class DynamoClient {
   }
 
   async updateItem<T>(table: string, key: Key, values: Partial<T>): Promise<void> {
-    const { updateExpression, updateValues, attributeNames } = formatUpdateExpression(values);
+    const update = buildUpdateExpression(values);
+    if (!update) return; // nothing to change; DynamoDB rejects an empty UpdateExpression
+
     await this.docClient.send(
       new UpdateCommand({
         TableName: table,
         Key: key,
-        UpdateExpression: updateExpression,
-        ExpressionAttributeNames: attributeNames,
-        ExpressionAttributeValues: updateValues,
+        UpdateExpression: update.expression,
+        ExpressionAttributeNames: update.names,
+        ExpressionAttributeValues: update.values,
         ReturnValues: 'NONE',
       }),
     );
@@ -143,7 +153,7 @@ export class DynamoClient {
 
   async queryItems<T>(params: QueryCommandInput): Promise<T[]> {
     const queryResponse = await this.docClient.send(new QueryCommand(params));
-    return queryResponse.Items as T[];
+    return (queryResponse.Items ?? []) as T[];
   }
 
   // https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Query.Pagination.html
@@ -152,16 +162,18 @@ export class DynamoClient {
     prevResultItems: T[] = [],
     exclusiveStartKey?: Key,
   ): Promise<T[]> {
-    const queryResponse = await this.docClient.send(
-      new QueryCommand({ ...params, ExclusiveStartKey: exclusiveStartKey }),
-    );
-    const resultItems = [...prevResultItems, ...(queryResponse.Items as T[])];
+    const items = [...prevResultItems];
+    let startKey: Key | undefined = exclusiveStartKey;
 
-    if (queryResponse.LastEvaluatedKey) {
-      return this.queryAllItems(params, resultItems, queryResponse.LastEvaluatedKey);
-    }
+    do {
+      const response = await this.docClient.send(
+        new QueryCommand({ ...params, ExclusiveStartKey: startKey }),
+      );
+      items.push(...((response.Items ?? []) as T[]));
+      startKey = response.LastEvaluatedKey as Key | undefined;
+    } while (startKey);
 
-    return resultItems;
+    return items;
   }
 
   async delete(command: DeleteCommandInput): Promise<void> {
@@ -176,82 +188,27 @@ export class DynamoClient {
   }
 
   async batchDeleteItems(table: string, keys: Key[]): Promise<void> {
-    const keysArray: Key[][] = keys.length > 25 ? chunkArray(keys, 25) : [keys];
-    const deletePromises = keysArray.map(async (chunk) => {
-      const deleteRequestKeys = chunk.map((item) => ({
-        DeleteRequest: {
-          Key: item,
-        },
-      }));
-
-      let requestItems: BatchWriteCommandInput['RequestItems'] = {
-        [table]: deleteRequestKeys,
-      };
-
-      let retryCount = 0;
-      while (retryCount < MAX_RETRIES) {
-        const response: BatchWriteCommandOutput = await this.docClient.send(
-          new BatchWriteCommand({ RequestItems: requestItems }),
-        );
-
-        if (this.hasProcessedAll(response)) break;
-
-        const delay = this.calculateRetryDelay(retryCount);
-        await this.sleep(delay);
-
-        this.logger.log('DynamoClient: BatchDeleteItems retrying');
-
-        requestItems = response.UnprocessedItems;
-        retryCount += 1;
-
-        if (retryCount === MAX_RETRIES)
-          throw new Error(
-            'DynamoClient: BatchDeleteItems request has unprocessed items after all retries.',
-          );
-      }
-    });
-
-    await Promise.all(deletePromises);
+    await Promise.all(
+      chunk(keys, BATCH_WRITE_LIMIT).map((keyChunk) =>
+        this.batchWriteWithRetry(
+          'BatchDeleteItems',
+          table,
+          keyChunk.map((Key) => ({ DeleteRequest: { Key } })),
+        ),
+      ),
+    );
   }
 
   async batchWriteItems<T>(table: string, putItems: Partial<T>[]): Promise<void> {
-    const putItemsArray: Partial<T>[][] =
-      putItems.length > 25 ? chunkArray(putItems, 25) : [putItems];
-    const writePromises = putItemsArray.map(async (chunk) => {
-      const putItemRequests = chunk.map((item) => ({
-        PutRequest: {
-          Item: item,
-        },
-      }));
-
-      let requestItems: BatchWriteCommandInput['RequestItems'] = {
-        [table]: putItemRequests,
-      };
-
-      let retryCount = 0;
-      while (retryCount < MAX_RETRIES) {
-        const response: BatchWriteCommandOutput = await this.docClient.send(
-          new BatchWriteCommand({ RequestItems: requestItems }),
-        );
-
-        if (this.hasProcessedAll(response)) break;
-
-        const delay = this.calculateRetryDelay(retryCount);
-        await this.sleep(delay);
-
-        this.logger.log('DynamoClient: BatchWriteItems retrying');
-
-        requestItems = response.UnprocessedItems;
-        retryCount += 1;
-
-        if (retryCount === MAX_RETRIES)
-          throw new Error(
-            'DynamoClient: BatchWriteItems request has unprocessed items after all retries.',
-          );
-      }
-    });
-
-    await Promise.all(writePromises);
+    await Promise.all(
+      chunk(putItems, BATCH_WRITE_LIMIT).map((itemChunk) =>
+        this.batchWriteWithRetry(
+          'BatchWriteItems',
+          table,
+          itemChunk.map((Item) => ({ PutRequest: { Item } })),
+        ),
+      ),
+    );
   }
 
   async putItemWithTTL<T>({
@@ -270,8 +227,44 @@ export class DynamoClient {
     return this.putItem(table, { ...item, validUntil });
   }
 
-  private hasProcessedAll(response: BatchWriteCommandOutput): boolean {
-    return !response.UnprocessedItems || !Object.keys(response.UnprocessedItems).length;
+  private async batchWriteWithRetry(
+    label: string,
+    table: string,
+    requests: NonNullable<BatchWriteCommandInput['RequestItems']>[string],
+  ): Promise<void> {
+    await this.retryUnprocessed<BatchWriteCommandInput['RequestItems']>(
+      label,
+      { [table]: requests },
+      async (requestItems) => {
+        const response = await this.docClient.send(new BatchWriteCommand({ RequestItems: requestItems }));
+        return nonEmpty(response.UnprocessedItems);
+      },
+    );
+  }
+
+  /**
+   * Sends a batch request, re-sending whatever DynamoDB reports as unprocessed with
+   * exponential backoff, and throws if anything is still unprocessed after MAX_RETRIES attempts.
+   * `send` returns the unprocessed remainder, or undefined when everything went through.
+   */
+  private async retryUnprocessed<R>(
+    label: string,
+    initialRequest: R,
+    send: (request: R) => Promise<R | undefined>,
+  ): Promise<void> {
+    let request: R | undefined = initialRequest;
+
+    for (let attempt = 0; request; attempt++) {
+      const unprocessed = await send(request);
+      if (!unprocessed) return;
+
+      if (attempt + 1 >= MAX_RETRIES) {
+        throw new Error(`DynamoClient: ${label} request has unprocessed items after all retries.`);
+      }
+      await this.sleep(this.calculateRetryDelay(attempt));
+      this.logger.log(`DynamoClient: ${label} retrying`);
+      request = unprocessed;
+    }
   }
 
   /**

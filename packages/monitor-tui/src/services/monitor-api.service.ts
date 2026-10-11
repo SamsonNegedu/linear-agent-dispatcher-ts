@@ -19,6 +19,7 @@ export interface MonitorSnapshot {
   queueRuns: Run[];
   completedRuns: Run[];
   failedRuns: Run[];
+  needsInputRuns: Run[];
   relayHealth: RelayHealth;
 }
 
@@ -33,12 +34,13 @@ function getRuns(status: RunStatus, limit: number): Promise<Run[]> {
 export async function fetchMonitorSnapshot(options: { refreshRelay?: boolean } = {}): Promise<MonitorSnapshot> {
   const statusPath = options.refreshRelay ? '/status?refresh=true' : '/status';
 
-  const [summary, activeRuns, queueRuns, completedRuns, failedRuns, status] = await Promise.all([
+  const [summary, activeRuns, queueRuns, completedRuns, failedRuns, needsInputRuns, status] = await Promise.all([
     get<MonitorSummary>('/monitor/summary'),
     getRuns('running', 50),
     getRuns('pending', 50),
     getRuns('succeeded', 20),
     getRuns('failed', 20),
+    getRuns('needs_input', 20),
     // /status is cheap even at 1s poll cadence — the dispatcher only reads a
     // value RelayHealthService caches from its own slower background check
     // against relay-service, it doesn't hit relay-service per request. The
@@ -48,5 +50,13 @@ export async function fetchMonitorSnapshot(options: { refreshRelay?: boolean } =
     get<StatusResponse>(statusPath),
   ]);
 
-  return { summary, activeRuns, queueRuns, completedRuns, failedRuns, relayHealth: status.relay };
+  return {
+    summary,
+    activeRuns,
+    queueRuns,
+    completedRuns,
+    failedRuns,
+    needsInputRuns,
+    relayHealth: status.relay,
+  };
 }

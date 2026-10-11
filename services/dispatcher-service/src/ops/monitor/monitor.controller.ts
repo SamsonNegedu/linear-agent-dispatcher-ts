@@ -25,12 +25,18 @@ export class MonitorController {
   @Get('runs')
   @HttpCode(200)
   async runs(
-    @Query('status') status?: 'running' | 'pending' | 'succeeded' | 'failed',
+    @Query('status') status?: Run['status'],
     @Query('limit') limitParam?: string,
   ): Promise<Run[]> {
     try {
       const limit = limitParam ? Math.min(parseInt(limitParam, 10), 1000) : 50;
-      const validStatuses: Run['status'][] = ['running', 'pending', 'succeeded', 'failed'];
+      const validStatuses: Run['status'][] = [
+        'running',
+        'pending',
+        'succeeded',
+        'failed',
+        'needs_input',
+      ];
 
       if (status && !validStatuses.includes(status)) {
         throw new HttpException({ error: 'Invalid status parameter' }, HttpStatus.BAD_REQUEST);

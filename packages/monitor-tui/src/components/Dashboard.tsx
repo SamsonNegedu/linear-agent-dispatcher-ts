@@ -19,7 +19,7 @@ export function Dashboard({
   const status = relayConnectionStatus(relayEnabled, relayHealth, colors);
 
   return (
-    <box style={{ border: true, borderColor: colors.accent, flexDirection: 'column', flexGrow: 1, padding: 1 }}>
+    <box style={{ border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', flexGrow: 1, padding: 1 }}>
       <text fg={colors.accent} attributes={1}>
         Connectivity
       </text>
@@ -66,16 +66,20 @@ export function Dashboard({
               {repo.repoPath}
             </text>
             {repo.issueLabelToSkill.length > 0 ? (
-              <text wrapMode="none" truncate>
-                {'  '}
-                <span fg={colors.muted}>{pad('Issue label:', LABEL_WIDTH)}</span>
-                {repo.issueLabelToSkill.map((m, i) => (
-                  <span key={m.label}>
-                    {i > 0 ? '  ' : ''}
-                    {m.label} <span fg={colors.muted}>→ invokes skill</span> {m.skill}
-                  </span>
-                ))}
-              </text>
+              repo.issueLabelToSkill.map((m, i) => (
+                <text key={m.label} wrapMode="none" truncate>
+                  {'  '}
+                  <span fg={colors.muted}>{pad(i === 0 ? 'Issue label:' : '', LABEL_WIDTH)}</span>
+                  {m.label} <span fg={colors.muted}>→</span> /{m.skill}{' '}
+                  {m.skillFound === true ? (
+                    <span fg={colors.succeeded}>✓</span>
+                  ) : m.skillFound === false ? (
+                    <span fg={colors.failed}>✗ skill not found in repo</span>
+                  ) : (
+                    <span fg={colors.muted}>(plugin)</span>
+                  )}
+                </text>
+              ))
             ) : (
               <text fg={colors.muted} wrapMode="none" truncate>
                 {'  '}

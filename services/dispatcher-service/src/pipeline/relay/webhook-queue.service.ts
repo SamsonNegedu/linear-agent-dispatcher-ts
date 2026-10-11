@@ -3,7 +3,7 @@ import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { WebhookQueueEntity } from '../../store/typeorm/webhook-queue.entity';
 import { DispatcherService } from '../dispatcher/dispatcher.service';
-import type { VerifiedEvent } from '@webhook-verify/core';
+import type { NormalizedEvent } from '@webhook-verify/core';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -24,7 +24,7 @@ export class WebhookQueueService implements OnModuleInit {
     void this.processNext();
   }
 
-  async enqueue(payload: VerifiedEvent): Promise<void> {
+  async enqueue(payload: NormalizedEvent): Promise<void> {
     const id = randomUUID();
     const { webhookId, idempotencyKey } = payload;
     const payloadJson = JSON.stringify(payload);
@@ -69,7 +69,7 @@ export class WebhookQueueService implements OnModuleInit {
         // Mark as processing
         await this.queueRepository.update(row.id, { status: 'processing' });
 
-        const payload = JSON.parse(row.payload) as VerifiedEvent;
+        const payload = JSON.parse(row.payload) as NormalizedEvent;
 
         try {
           await this.dispatcherService.dispatchWebhook(payload);

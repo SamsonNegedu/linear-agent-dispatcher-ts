@@ -1,2 +1,2 @@
-export * from './chunkArray';
-export * from './formatUpdateExpression';
+export * from './chunk.util';
+export * from './update-expression.util';

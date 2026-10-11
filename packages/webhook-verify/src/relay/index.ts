@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { safeEqual } from '../core/safe-equal';
 
 // Relay-specific verification: HMAC signature for relay→dispatcher webhooks
 
@@ -9,9 +10,6 @@ export const signWebhookPayload = (payload: string, secret: string): string => {
 
 export const verifyWebhookSignature = (
   payload: string,
-  signature: string,
+  signature: string | undefined,
   secret: string,
-): boolean => {
-  const expected = signWebhookPayload(payload, secret);
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-};
+): boolean => safeEqual(signature, signWebhookPayload(payload, secret));

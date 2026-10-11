@@ -1,18 +1,38 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import { homedir } from 'os';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import {
+  RepositoryEntry,
+  RoutingConfigFile,
+  formatSchemaIssues,
+  repoLabel,
+  repoPathOf,
+  routingConfigSchema,
+} from './routing-schema';
+import { labelForSkill } from './skill-discovery';
 
-// Mode labels determine which Claude skill to invoke for an issue. Teams
-// define their own mode labels in routing.config.json (any naming
-// convention is allowed), e.g. agent-implement, ready-for-agent, skill-test.
-const MODE_LABEL_PATTERN = /^[a-zA-Z0-9_-]+$/;
+// auto = skill listed in `skills` (label agent-<name>); override = issueLabelToSkill
+export type MappingSource = 'auto' | 'override';
+
+export interface ResolvedMapping {
+  issueLabel: string;
+  skill: string;
+  source: MappingSource;
+}
+
+export interface ResolvedRepo {
+  label: string;
+  path: string;
+  description?: string;
+  mappings: ResolvedMapping[];
+}
 
 interface RepositoryConfig {
   label: string;
   path: string;
   description?: string;
-  issueLabelToSkill?: Record<string, string>; // Linear issue label → Claude skill name mapping
+  issueLabelToSkill: Record<string, string>; // Linear issue label -> Claude skill name (fully resolved)
 }
 
 interface RoutingPolicy {
@@ -30,25 +50,31 @@ const DEFAULT_POLICY: RoutingPolicy = {
   duplicateRunWindowMs: 60_000,
 };
 
-interface RoutingConfigFile {
-  repositories: RepositoryConfig[];
-  policy?: Partial<RoutingPolicy>;
+export const ROUTING_CONFIG_FILE = 'routing.config.json';
+
+export function routingConfigPath(): string {
+  return join(process.cwd(), ROUTING_CONFIG_FILE);
+}
+
+function expandHome(p: string): string {
+  return p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p;
 }
 
 /**
- * Load and manage repository routing configuration from routing.config.json
- * Validates structure and uniqueness of labels
+ * Load routing.config.json (schema-validated). The top-level `skills` (plus a
+ * repo's own `skills`) are the only skills a Linear label can trigger:
+ * `agent-<name>` runs `/<name>`. `issueLabelToSkill` maps a label to a
+ * differently named skill. Whether paths and skills exist on disk is checked
+ * by preflight / `pnpm routes check`.
  */
 @Injectable()
 export class RoutingConfigService {
   private readonly logger = new Logger(RoutingConfigService.name);
   private readonly config: RoutingConfigFile;
-  private readonly repoMapping: Map<string, string>;
   private readonly policy: RoutingPolicy;
 
   constructor() {
     this.config = this.loadRoutingConfig();
-    this.repoMapping = this.buildRepoMapping();
     this.policy = { ...DEFAULT_POLICY, ...this.config.policy };
   }
 
@@ -60,183 +86,102 @@ export class RoutingConfigService {
     return this.policy;
   }
 
-  /**
-   * Get the repository path for a given label
-   * Returns undefined if label not found
-   */
+  /** Repos with every mapping annotated by where it came from (reads disk). */
+  getResolvedRepos(): ResolvedRepo[] {
+    return this.config.repositories.map((repo) => this.resolveRepo(repo));
+  }
+
   getRepoPath(label: string): string | undefined {
-    return this.repoMapping.get(label);
+    return this.findRepo(label)?.path;
   }
 
-  /**
-   * Get all configured repositories
-   */
   getAllRepositories(): RepositoryConfig[] {
-    return this.config.repositories;
+    return this.getResolvedRepos().map((repo) => ({
+      label: repo.label,
+      path: repo.path,
+      description: repo.description,
+      issueLabelToSkill: Object.fromEntries(repo.mappings.map((m) => [m.issueLabel, m.skill])),
+    }));
   }
 
-  /**
-   * Get all configured repository labels
-   */
   getRepositoryLabels(): string[] {
-    return this.config.repositories.map((r) => r.label);
+    return this.config.repositories.map(repoLabel);
   }
 
-  /**
-   * Get all valid mode labels for a given repository
-   * Returns empty array if repo not found or has no modes
-   */
-  getValidModesForRepo(repoLabel: string): string[] {
-    const repo = this.config.repositories.find((r) => r.label === repoLabel);
-    if (!repo || !repo.issueLabelToSkill) {
-      return [];
-    }
-    return Object.keys(repo.issueLabelToSkill);
+  /** Issue labels that trigger a skill for the repo; empty if repo unknown. */
+  getValidModesForRepo(repoLabelName: string): string[] {
+    return this.findRepo(repoLabelName)?.mappings.map((m) => m.issueLabel) ?? [];
   }
 
-  /**
-   * Get skill for a given mode label on a specific repository
-   * Returns undefined if repo not found or mode not configured
-   */
-  getSkillForMode(repoLabel: string, modeLabel: string): string | undefined {
-    const repo = this.config.repositories.find((r) => r.label === repoLabel);
-    if (!repo || !repo.issueLabelToSkill) {
-      return undefined;
-    }
-    return repo.issueLabelToSkill[modeLabel];
+  getSkillForMode(repoLabelName: string, modeLabel: string): string | undefined {
+    return this.findRepo(repoLabelName)?.mappings.find((m) => m.issueLabel === modeLabel)?.skill;
   }
 
-  /**
-   * Get repo mapping as plain object (for compatibility)
-   */
+  /** Repo label -> path (for compatibility). */
   getRepoMapping(): Record<string, string> {
-    const mapping: Record<string, string> = {};
-    for (const [label, path] of this.repoMapping.entries()) {
-      mapping[label] = path;
+    return Object.fromEntries(
+      this.config.repositories.map((r) => [repoLabel(r), expandHome(repoPathOf(r))]),
+    );
+  }
+
+  private findRepo(label: string): ResolvedRepo | undefined {
+    const entry = this.config.repositories.find((r) => repoLabel(r) === label);
+    return entry ? this.resolveRepo(entry) : undefined;
+  }
+
+  private resolveRepo(entry: RepositoryEntry): ResolvedRepo {
+    const path = expandHome(repoPathOf(entry));
+    const overrides = typeof entry === 'string' ? {} : (entry.issueLabelToSkill ?? {});
+    const merged = new Map<string, ResolvedMapping>();
+
+    const exposed = new Set([
+      ...(this.config.skills ?? []),
+      ...(typeof entry === 'string' ? [] : (entry.skills ?? [])),
+    ]);
+    for (const skill of exposed) {
+      const issueLabel = labelForSkill(skill);
+      merged.set(issueLabel, { issueLabel, skill, source: 'auto' });
     }
-    return mapping;
+    for (const [issueLabel, skill] of Object.entries(overrides)) {
+      merged.set(issueLabel, { issueLabel, skill, source: 'override' });
+    }
+
+    return {
+      label: repoLabel(entry),
+      path,
+      description: typeof entry === 'string' ? undefined : entry.description,
+      mappings: [...merged.values()].sort((a, b) => a.issueLabel.localeCompare(b.issueLabel)),
+    };
   }
 
   private loadRoutingConfig(): RoutingConfigFile {
-    // Try to load routing.config.json from project root
-    const configPath = join(process.cwd(), 'routing.config.json');
+    const configPath = routingConfigPath();
 
     if (!existsSync(configPath)) {
       throw new Error(
         `routing.config.json not found at ${configPath}. ` +
-          `Copy routing.config.example.json to routing.config.json and configure your repositories.`,
+          `Copy routing.config.example.json to routing.config.json, or run \`pnpm routes add <repo-path>\`.`,
       );
     }
 
+    let raw: unknown;
     try {
-      const content = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(content) as RoutingConfigFile;
-      this.validateRoutingConfig(config);
-      this.logger.log(
-        `Loaded ${config.repositories.length} repositories from routing.config.json`,
-      );
-      return config;
+      raw = JSON.parse(readFileSync(configPath, 'utf-8'));
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        throw new Error(`Invalid JSON in routing.config.json: ${error.message}`);
-      }
-      throw error;
-    }
-  }
-
-  private validateRoutingConfig(config: RoutingConfigFile): void {
-    if (config.policy !== undefined) {
-      if (typeof config.policy !== 'object' || Array.isArray(config.policy)) {
-        throw new Error('routing.config.json "policy" must be an object');
-      }
-      if (
-        config.policy.skipDoneIssues !== undefined &&
-        typeof config.policy.skipDoneIssues !== 'boolean'
-      ) {
-        throw new Error('routing.config.json "policy.skipDoneIssues" must be a boolean');
-      }
-      if (
-        config.policy.duplicateRunWindowMs !== undefined &&
-        (typeof config.policy.duplicateRunWindowMs !== 'number' ||
-          config.policy.duplicateRunWindowMs < 0)
-      ) {
-        throw new Error(
-          'routing.config.json "policy.duplicateRunWindowMs" must be a non-negative number',
-        );
-      }
+      throw new Error(
+        `Invalid JSON in routing.config.json: ${error instanceof Error ? error.message : error}`,
+      );
     }
 
-    if (!config.repositories || !Array.isArray(config.repositories)) {
-      throw new Error('routing.config.json must have a "repositories" array');
+    const parsed = routingConfigSchema.safeParse(raw);
+    if (!parsed.success) {
+      const duplicate = parsed.error.issues.find((i) => i.message.startsWith('Duplicate'));
+      throw new Error(
+        duplicate ? duplicate.message : `Invalid routing.config.json:\n${formatSchemaIssues(parsed.error)}`,
+      );
     }
 
-    if (config.repositories.length === 0) {
-      throw new Error('routing.config.json must define at least one repository');
-    }
-
-    const labels = new Set<string>();
-
-    for (const repo of config.repositories) {
-      // Validate required fields
-      if (!repo.label || typeof repo.label !== 'string') {
-        throw new Error(`Each repository must have a "label" field (string)`);
-      }
-
-      if (!repo.path || typeof repo.path !== 'string') {
-        throw new Error(`Repository "${repo.label}" must have a "path" field (string)`);
-      }
-
-      // Validate label is unique
-      if (labels.has(repo.label)) {
-        throw new Error(`Duplicate repository label: "${repo.label}"`);
-      }
-      labels.add(repo.label);
-
-      // Validate label format (no spaces, valid characters)
-      if (!/^[a-zA-Z0-9_-]+$/.test(repo.label)) {
-        throw new Error(
-          `Invalid label format: "${repo.label}". Labels must contain only alphanumeric, dash, or underscore.`,
-        );
-      }
-
-      // Validate issueLabelToSkill if present
-      if (repo.issueLabelToSkill) {
-        if (typeof repo.issueLabelToSkill !== 'object' || Array.isArray(repo.issueLabelToSkill)) {
-          throw new Error(
-            `Repository "${repo.label}" issueLabelToSkill must be an object mapping issue labels to skills`,
-          );
-        }
-
-        for (const [modeLabel, skill] of Object.entries(repo.issueLabelToSkill)) {
-          if (!modeLabel || typeof modeLabel !== 'string') {
-            throw new Error(
-              `Repository "${repo.label}" has invalid mode label (must be non-empty string)`,
-            );
-          }
-          if (!skill || typeof skill !== 'string') {
-            throw new Error(
-              `Repository "${repo.label}" mode "${modeLabel}" must map to a skill name (string)`,
-            );
-          }
-          // Validate mode label format
-          if (!MODE_LABEL_PATTERN.test(modeLabel)) {
-            throw new Error(
-              `Invalid mode format in "${repo.label}": "${modeLabel}". ` +
-                `Modes must contain only alphanumeric, dash, or underscore.`,
-            );
-          }
-        }
-      }
-    }
-  }
-
-  private buildRepoMapping(): Map<string, string> {
-    const mapping = new Map<string, string>();
-
-    for (const repo of this.config.repositories) {
-      mapping.set(repo.label, repo.path);
-    }
-
-    return mapping;
+    this.logger.log(`Loaded ${parsed.data.repositories.length} repositories from routing.config.json`);
+    return parsed.data;
   }
 }

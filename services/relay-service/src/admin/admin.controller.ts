@@ -17,6 +17,9 @@ import { WebhookDeliveries } from '../webhook/webhook-deliveries.repository';
 import { SUBSCRIBER_REGISTRY_REPOSITORY } from '../subscriber/subscriber-registry.provider';
 import { WEBHOOK_DELIVERIES_REPOSITORY } from '../webhook/webhook-deliveries.provider';
 
+const DEFAULT_DELIVERIES_LIMIT = 50;
+const MAX_DELIVERIES_LIMIT = 100;
+
 @Controller('admin')
 export class AdminController {
   private readonly logger = new Logger(AdminController.name);
@@ -26,7 +29,7 @@ export class AdminController {
     @Inject(WEBHOOK_DELIVERIES_REPOSITORY) private readonly deliveries: WebhookDeliveries,
   ) {}
 
-  @Get('api/subscribers')
+  @Get('subscribers')
   @UseGuards(AdminAuthGuard)
   @HttpCode(200)
   async getSubscribers(@Query('teamKey') teamKey?: string) {
@@ -55,7 +58,7 @@ export class AdminController {
     };
   }
 
-  @Delete('api/subscribers/:subscriberId')
+  @Delete('subscribers/:subscriberId')
   @UseGuards(AdminAuthGuard)
   @HttpCode(204)
   async deleteSubscriber(@Param('subscriberId') subscriberId: string) {
@@ -68,7 +71,7 @@ export class AdminController {
     }
   }
 
-  @Get('api/deliveries')
+  @Get('deliveries')
   @UseGuards(AdminAuthGuard)
   @HttpCode(200)
   async getDeliveries(@Query('teamKey') teamKey: string, @Query('limit') limitStr?: string) {
@@ -76,7 +79,7 @@ export class AdminController {
       throw new HttpException('teamKey query parameter required', HttpStatus.BAD_REQUEST);
     }
 
-    const limit = limitStr ? Math.min(parseInt(limitStr, 10), 100) : 50;
+    const limit = limitStr ? Math.min(parseInt(limitStr, 10), MAX_DELIVERIES_LIMIT) : DEFAULT_DELIVERIES_LIMIT;
     const records = await this.deliveries.listByTeam(teamKey, limit);
 
     return {

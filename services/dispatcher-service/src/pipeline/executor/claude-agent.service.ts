@@ -2,15 +2,23 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { spawn } from 'child_process';
 import type { DispatcherConfig } from '../../config/config';
 import { MAX_ERROR_MESSAGE_LENGTH } from './constants';
+import { McpServerDiscoveryService } from './mcp-server-discovery.service';
 
 interface ClaudeSpawnResult {
-  status: 'succeeded' | 'failed';
+  status: 'succeeded' | 'failed' | 'needs_input';
   exitCode?: number;
   errorSnippet?: string;
   sessionId?: string;
   resultText?: string;
   totalCostUSD?: number;
 }
+
+// A skill that must stop to ask something (nobody can answer an unattended run)
+// begins its final reply with "Stop rule:". Tolerates leading markdown such as `**`.
+const STOP_RULE_PATTERN = /^[\s*_`>#-]*Stop rule:/i;
+
+export const isStopRuleReply = (text: string | undefined): boolean =>
+  !!text && STOP_RULE_PATTERN.test(text);
 
 // How long to wait after SIGTERM before escalating to SIGKILL, if the
 // process (or something it spawned) hasn't exited on its own.
@@ -30,7 +38,10 @@ interface ClaudeOutput {
 export class ClaudeAgentService {
   private readonly logger = new Logger(ClaudeAgentService.name);
 
-  constructor(@Inject('DispatcherConfig') private readonly config: DispatcherConfig) {}
+  constructor(
+    @Inject('DispatcherConfig') private readonly config: DispatcherConfig,
+    private readonly mcpDiscovery: McpServerDiscoveryService,
+  ) {}
 
   async spawn(
     skill: string,
@@ -39,6 +50,9 @@ export class ClaudeAgentService {
     options?: { resumeSessionId?: string },
   ): Promise<ClaudeSpawnResult> {
     this.logger.log(`Claude spawn: /${skill} for ${issueIdentifier} in ${repoPath}`);
+
+    const { allowedTools = [], allowAllMcp, permissionMode } = this.config.executor;
+    const allowRules = [...allowedTools, ...(allowAllMcp ? await this.mcpDiscovery.allowRules(repoPath) : [])];
 
     return new Promise((resolve, reject) => {
       const prompt = `/${skill} ${issueIdentifier}`;
@@ -50,6 +64,10 @@ export class ClaudeAgentService {
 
       args.push(prompt);
       args.push('--output-format', 'json');
+      // Comma-joined into one value: --allowedTools is variadic and would otherwise
+      // swallow any argument that follows it.
+      if (allowRules.length > 0) args.push('--allowedTools', allowRules.join(','));
+      if (permissionMode) args.push('--permission-mode', permissionMode);
 
       const env = this.buildSafeEnv();
 
@@ -117,7 +135,17 @@ export class ClaudeAgentService {
           errorSnippet = stderr.slice(-MAX_ERROR_MESSAGE_LENGTH);
         }
 
-        if (code === 0 && !isError) {
+        if (code === 0 && !isError && isStopRuleReply(resultText)) {
+          this.logger.warn(`Claude spawn stopped to ask: /${skill} (sessionId: ${sessionId})`);
+          resolve({
+            status: 'needs_input',
+            exitCode: code ?? undefined,
+            errorSnippet: resultText!.slice(0, MAX_ERROR_MESSAGE_LENGTH),
+            sessionId,
+            resultText,
+            totalCostUSD,
+          });
+        } else if (code === 0 && !isError) {
           this.logger.log(
             `Claude spawn succeeded: /${skill} (sessionId: ${sessionId}, cost: $${totalCostUSD})`,
           );

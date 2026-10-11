@@ -41,7 +41,7 @@ export class RequestIdInterceptor implements NestInterceptor {
 
     // Run the rest of the request within this context
     return new Observable((observer) => {
-      // eslint-disable-next-line @typescript-eslint/require-await
+      // oxlint-disable-next-line @typescript-eslint/require-await
       void requestContextManager.runAsync(requestContext, async () => {
         next.handle().subscribe(
           (data: unknown) => {

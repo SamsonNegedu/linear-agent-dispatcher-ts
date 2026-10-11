@@ -10,9 +10,9 @@ Read these to understand *why the system looks the way it does*.
 - **[ADR 0001: Relay Service Architecture](0001-relay-service-architecture.md)** — Why a dedicated, serverless relay exists at all: OAuth gateway, subscriber registry, Lambda + DynamoDB + NestJS/Fastify.
 - **[ADR 0002: OAuth and Subscriber Registration](0002-oauth-and-subscriber-registration.md)** — How a dispatcher connects: two-stage OAuth flow, HMAC signing.
 - **[ADR 0003: Webhook Routing and Delivery](0003-webhook-routing-and-delivery.md)** — Relay → dispatcher delivery mechanics: synchronous, fire-and-forget, no retry.
-- **[ADR 0004: Webhook Dispatch — Trigger Semantics and Repository Routing](0004-dispatch-trigger-and-repo-routing.md)** — Whether a webhook should trigger a dispatch at all (the rule that stops the dispatcher's own comments from re-triggering itself), and if so, which repo + skill it routes to, the `routing.config.json` policy block, and startup preflight checks.
+- **[ADR 0004: Webhook Dispatch — Trigger Semantics and Repository Routing](0004-dispatch-trigger-and-repo-routing.md)** — Whether a webhook should trigger a dispatch at all (the rule that stops the dispatcher's own comments from re-triggering itself), and if so, which repo + skill it routes to, the `routing.config.json` format (repos + exposed skills) and policy block, and startup preflight checks.
 - **[ADR 0005: Deterministic Subscriber Identity](0005-deterministic-subscriber-identity.md)** — Why a subscriber's ID excludes its delivery endpoint, and the duplicate-delivery bug that happens if it doesn't.
-- **[ADR 0006: Dispatcher Run Reliability](0006-dispatcher-run-reliability.md)** — What happens on failure, timeout, or crash once a run is enqueued.
+- **[ADR 0006: Dispatcher Run Reliability](0006-dispatcher-run-reliability.md)** — What happens on failure, timeout, crash, a denied permission, or a question once a run is enqueued.
 
 That's the whole set — small enough to read start to finish for onboarding.
 
@@ -55,4 +55,4 @@ When adding a new feature or changing an existing decision:
 | How are webhooks delivered?                      | [0003](0003-webhook-routing-and-delivery.md)              |
 | Should a webhook dispatch at all, and which repo/skill does it route to? | [0004](0004-dispatch-trigger-and-repo-routing.md) |
 | Why doesn't re-registering create a duplicate?   | [0005](0005-deterministic-subscriber-identity.md)          |
-| What happens if a run fails, hangs, or crashes?  | [0006](0006-dispatcher-run-reliability.md)                  |
+| What happens if a run fails, hangs, crashes, or needs to ask something? | [0006](0006-dispatcher-run-reliability.md) |

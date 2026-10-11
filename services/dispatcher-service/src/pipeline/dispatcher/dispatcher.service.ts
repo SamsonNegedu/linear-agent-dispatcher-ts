@@ -1,12 +1,8 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { IStoreRepository } from '../../store/store.interfaces';
 import { ExecutorService } from '../executor/executor.service';
-import { shouldTriggerDispatch, isTerminalStateType, type VerifiedEvent } from '@webhook-verify/core';
-import { RoutingConfigService } from '../../config/routing-config.service';
-import { ActivityNotifierService } from '../executor/activity-notifier.service';
-import { IssueCommentService } from '../executor/issue-comment.service';
-import { LabelValidationService } from './label-validation.service';
-import { ValidationError, IncompleteLabelsError } from './validation.error';
+import { ValidationError, IncompleteLabelsError, AdapterRegistry } from '@webhook-verify/core';
+import type { DispatchAdapter, NormalizedEvent } from '@webhook-verify/core';
 import type { IIssueContextResolver } from './issue-context-resolver.interface';
 import {
   DuplicatePayloadError,
@@ -21,25 +17,17 @@ export class DispatcherService {
   constructor(
     @Inject('IStoreRepository') private readonly store: IStoreRepository,
     private readonly executorService: ExecutorService,
-    private readonly routingConfig: RoutingConfigService,
-    private readonly activityNotifier: ActivityNotifierService,
-    private readonly issueComments: IssueCommentService,
+    @Inject('DispatchAdapterRegistry')
+    private readonly dispatchAdapterRegistry: AdapterRegistry<DispatchAdapter>,
     @Inject('IIssueContextResolver') private readonly issueContextResolver: IIssueContextResolver,
   ) {}
 
-  async dispatchWebhook(event: VerifiedEvent): Promise<void> {
-    const decision = shouldTriggerDispatch(event);
+  async dispatchWebhook(event: NormalizedEvent): Promise<void> {
+    const dispatchAdapter = this.dispatchAdapterRegistry.getOrThrow(event.provider);
+    const decision = dispatchAdapter.shouldDispatch(event);
     if (!decision.shouldDispatch) {
       this.logger.debug(
         `Skipping dispatch: ${decision.reason} issue=${event.issueIdentifier} webhookId=${event.webhookId}`,
-      );
-      return;
-    }
-
-    const policy = this.routingConfig.getPolicy();
-    if (policy.skipDoneIssues && isTerminalStateType(event.stateType)) {
-      this.logger.debug(
-        `Skipping dispatch: issue state is terminal (${event.stateType}) and policy.skipDoneIssues is enabled issue=${event.issueIdentifier} webhookId=${event.webhookId}`,
       );
       return;
     }
@@ -52,22 +40,19 @@ export class DispatcherService {
       // fallback fetch instead of issuing a second API call for it.
       const issueContext = await this.issueContextResolver.resolveIssueContext(
         event.issueId,
-        event.labels || [],
+        event.routingTags,
       );
-      const labels = issueContext.labels;
+      event.routingTags = issueContext.labels;
       if (!event.issueIdentifier && issueContext.identifier) {
         event.issueIdentifier = issueContext.identifier;
       }
 
-      // Validate and resolve labels to routing decision
-      const { repoLabel, repoPath, skill } = LabelValidationService.resolveRun(
-        labels,
-        this.routingConfig,
-      );
+      // Validate and resolve routing tags to a routing decision
+      const { repoLabel, repoPath, skill, dedupeWindowMs } = dispatchAdapter.resolveRouting(event);
 
       // Enqueue run
       const run = await this.store.enqueueRun({
-        provider: 'linear',
+        provider: event.provider,
         issueId: event.issueId,
         issueIdentifier: event.issueIdentifier,
         issueTitle: event.issueTitle,
@@ -78,7 +63,7 @@ export class DispatcherService {
         skill,
         triggerSource: event.labelChange ? 'label' : 'webhook',
         providerSessionId: event.sessionId,
-        dedupeWindowMs: policy.duplicateRunWindowMs,
+        dedupeWindowMs,
       });
 
       this.logger.log(`Enqueued run: ${run.id} in repo: ${repoPath} with skill: ${skill}`);
@@ -98,8 +83,8 @@ export class DispatcherService {
       }
 
       // Missing-mode-label-only: routine state for issues still being triaged,
-      // not a misconfiguration — skip silently instead of posting a comment/
-      // activity on every relabel or update.
+      // not a misconfiguration — skip silently instead of posting feedback on
+      // every relabel or update.
       if (error instanceof IncompleteLabelsError) {
         this.logger.debug(
           `Skipping dispatch: mode label not yet set for ${event.issueIdentifier}: ${error.message}`,
@@ -113,15 +98,15 @@ export class DispatcherService {
       // deliberately enforcing.
       if (error instanceof ValidationError) {
         // Expected failure: user needs to fix labels/config
-        // Already posting comment/activity below; log at INFO level with clear marker
+        // Already posting feedback below; log at INFO level with clear marker
         this.logger.log(
           `[ACTION_POSTED] Label validation failed for ${event.issueIdentifier}: ${error.message}`,
         );
       } else if (error instanceof ActiveRunError || error instanceof RecentDuplicateRunError) {
         // Expected rejection: the store deliberately declined to enqueue this
         // run (another run is already active, or one just completed for the
-        // same issue/domain/skill). Not a bug — already posting comment/
-        // activity below so the user knows why nothing happened.
+        // same issue/domain/skill). Not a bug — already posting feedback
+        // below so the user knows why nothing happened.
         this.logger.log(
           `[ACTION_SKIPPED] Run rejected by policy for ${event.issueIdentifier}: ${error.message}`,
         );
@@ -133,15 +118,8 @@ export class DispatcherService {
         );
       }
 
-      // Route error notification based on webhook type:
-      // - Agent sessions: post activity (rich, structured feedback in session timeline)
-      // - Issue webhooks: post comment (plain feedback on issue thread)
       if (error instanceof Error) {
-        if (event.sessionId) {
-          await this.activityNotifier.postElicitation(event.sessionId, error.message);
-        } else if (event.issueId) {
-          await this.issueComments.postRequired(event.issueId, error.message);
-        }
+        await dispatchAdapter.postFeedback(event, error.message);
       }
 
       throw error;

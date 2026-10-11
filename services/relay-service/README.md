@@ -45,7 +45,7 @@ curl "http://localhost:3001/subscribers/auth/start?localEndpoint=http://localhos
 
 `localEndpoint` must be the **full delivery URL**, not just an origin — the relay has no knowledge of the receiver's route structure, so it POSTs to whatever you give it verbatim. For the dispatcher, that's `.../webhooks/relay`.
 
-It must also be `https://`, or `http://localhost:<port>` specifically — `http://127.0.0.1:...` is rejected (see `isValidWebhookEndpoint` in `subscriber.controller.ts`). If you're pointing a deployed relay at a locally-running dispatcher, `localhost` isn't reachable from AWS either — tunnel it first (e.g. `ngrok http 3000`) and use the `https://` URL that prints.
+It must also be `https://`, or `http://localhost:<port>` specifically — `http://127.0.0.1:...` is rejected (see `isValidWebhookEndpoint` in `subscriber.controller.ts`). If you're pointing a deployed relay at a locally-running dispatcher, `localhost` isn't reachable from AWS either — tunnel it first (Tailscale Funnel, a Cloudflare tunnel or `ngrok http 3000`) and use the `https://` URL that prints. For a fully local relay, `pnpm dev:up` from the repo root starts everything, including a tunnel.
 
 ## Deployment
 

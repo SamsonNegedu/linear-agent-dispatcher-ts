@@ -24,7 +24,15 @@ export const ROW_COLUMNS = {
   ] satisfies RowColumn[],
 };
 
-export const TAB_NAMES = ['Dashboard', 'Logs', 'Relay', 'Runs', 'Completed', 'Failed'] as const;
+export const TAB_NAMES = [
+  'Dashboard',
+  'Logs',
+  'Relay',
+  'Runs',
+  'Needs input',
+  'Completed',
+  'Failed',
+] as const;
 
 export type TabName = (typeof TAB_NAMES)[number];
 

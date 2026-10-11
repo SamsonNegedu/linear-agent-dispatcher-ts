@@ -64,7 +64,7 @@ export function RelayTab({ onRunScript, mode, setMode, relayHealth }: RelayTabPr
   }
 
   return (
-    <box style={{ border: true, borderColor: colors.accent, flexDirection: 'column', flexGrow: 1, padding: 1 }}>
+    <box style={{ border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', flexGrow: 1, padding: 1 }}>
       <box style={{ flexDirection: 'row' }}>
         <text attributes={1}>Relay Connection</text>
         <text>

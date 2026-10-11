@@ -1,19 +1,9 @@
 {
+  "$schema": "./routing.config.schema.json",
   "policy": {
     "skipDoneIssues": false,
     "duplicateRunWindowMs": 60000
   },
-  "repositories": [
-    {
-      "label": "my-repo",
-      "path": "/absolute/path/to/my/repo",
-      "description": "My service repository",
-      "issueLabelToSkill": {
-        "agent-implement": "linear-implement",
-        "agent-plan": "linear-plan",
-        "agent-test": "linear-test"
-      }
-    }
-  ],
-  "_comment": "issueLabelToSkill: User-defined mapping of a Linear issue label (key, format: agent-*) to the Claude /skill it invokes (value). Each skill must exist in the repo's .claude/settings.json. Teams can define any labels they want based on their available skills. policy.skipDoneIssues: when true, updates on issues whose Linear state is Completed/Canceled never dispatch, even if a trigger label was added. policy.duplicateRunWindowMs: minimum time between two runs for the same (issue, domain, skill) before a new one is rejected as a duplicate."
+  "skills": ["implement"],
+  "repositories": ["/absolute/path/to/my/repo"]
 }

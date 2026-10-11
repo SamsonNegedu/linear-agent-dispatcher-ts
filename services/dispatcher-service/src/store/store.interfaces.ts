@@ -8,7 +8,8 @@ export interface Run {
   domainLabel: string;
   repoPath: string;
   skill: string;
-  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  // needs_input: the agent stopped on purpose to ask a question (final reply starts with "Stop rule:")
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'needs_input';
   claudeSessionId?: string;
   exitCode?: number;
   errorSnippet?: string;
@@ -40,7 +41,7 @@ export interface EnqueueRunInput {
 }
 
 export interface CompleteRunInput {
-  status: 'succeeded' | 'failed';
+  status: 'succeeded' | 'failed' | 'needs_input';
   claudeSessionId?: string;
   exitCode?: number;
   errorSnippet?: string;

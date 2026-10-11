@@ -1,10 +1,9 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { signWebhookPayload } from '@webhook-verify/core/relay';
+import { AdapterRegistry } from '@webhook-verify/core';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
-import { VerifiedEvent } from '@webhook-verify/core/linear';
-import { RelayServiceConfig } from '../config/relay-config';
-import { LinearGraphQLClient } from '@linear-agent/linear-client';
+import type { NormalizedEvent, RoutingResolver } from '@webhook-verify/core';
 
 export interface WebhookFanOutResult {
   webhookId: string;
@@ -18,44 +17,30 @@ export interface WebhookFanOutResult {
 @Injectable()
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
-  private linearClient: LinearGraphQLClient | null;
 
   constructor(
     private readonly subscriberService: SubscriberService,
     private readonly deliveryService: WebhookDeliveryService,
-    @Inject('RelayServiceConfig') private readonly config: RelayServiceConfig,
-  ) {
-    this.linearClient = config.linear.apiKey
-      ? new LinearGraphQLClient(config.linear.apiKey, this.logger)
-      : null;
-  }
+    @Inject('RoutingResolverRegistry')
+    private readonly routingResolverRegistry: AdapterRegistry<RoutingResolver>,
+  ) {}
 
-  async fanOutWebhook(webhook: VerifiedEvent, rawPayload: string): Promise<WebhookFanOutResult> {
-    const { webhookId, issueId, issueIdentifier, idempotencyKey, type } = webhook;
-    let { teamKey, assigneeId } = webhook;
+  async fanOutWebhook(webhook: NormalizedEvent, rawPayload: string): Promise<WebhookFanOutResult> {
+    const { webhookId, issueId, issueIdentifier, idempotencyKey } = webhook;
+    // Locally named teamKey/assigneeId: SubscriberService and its DynamoDB-backed
+    // registry are keyed on Linear's team/user routing primitives (GSI partition
+    // keys, subscriber IDs) — that storage schema is Linear-specific infra, kept
+    // as-is here rather than threading routingKey/ownerId all the way through it.
+    let teamKey = webhook.routingKey;
+    let assigneeId = webhook.ownerId;
 
-    // For agent session webhooks without assignee info, try to fetch the issue for routing
-    if (type === 'AgentSession' && !assigneeId && issueId) {
-      if (!this.linearClient) {
-        this.logger.warn(
-          `Agent session webhook ${webhookId} skipped: LINEAR_API_KEY not configured. ` +
-            `Configure it in relay to route agent sessions by fetching issue assignee.`,
-        );
-      } else {
-        try {
-          this.logger.log(
-            `Fetching issue ${issueId} to resolve assignee for agent session webhook`,
-          );
-          const issueInfo = await this.linearClient.fetchIssueAssignee(issueId);
-          assigneeId = issueInfo.assigneeId;
-          if (!teamKey) {
-            teamKey = issueInfo.teamKey;
-          }
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          this.logger.warn(`Failed to fetch issue ${issueId} for agent session: ${errorMsg}`);
-        }
-      }
+    // Backfill routing info the webhook didn't carry (e.g. an agent session
+    // event with no assignee) via the provider's own resolver, if it has one.
+    const resolver = this.routingResolverRegistry.get(webhook.provider);
+    if (resolver && (!teamKey || !assigneeId)) {
+      const resolved = await resolver.resolveMissingRouting(webhook);
+      assigneeId = assigneeId || resolved.ownerId;
+      teamKey = teamKey || resolved.routingKey;
     }
 
     // Skip if no assignee (unassigned issue or agent session with no issue fetch)
@@ -99,6 +84,7 @@ export class WebhookService {
           subscriber.subscriberSecret,
           rawPayload,
           webhook,
+          teamKey,
         ),
       ),
     );
@@ -132,16 +118,17 @@ export class WebhookService {
     endpoint: string,
     secret: string,
     payload: string,
-    webhook: VerifiedEvent,
+    webhook: NormalizedEvent,
+    teamKey: string,
   ): Promise<{ subscriberId: string; endpoint: string; success: boolean; reason?: string }> {
     const signature = signWebhookPayload(payload, secret);
     const deliveryId = await this.deliveryService.logAttempt(
       subscriberId,
-      webhook.teamKey!,
+      teamKey,
       webhook.webhookId,
       webhook.issueId,
       webhook.issueIdentifier,
-      webhook.assigneeId,
+      webhook.ownerId,
     );
 
     const startTime = Date.now();

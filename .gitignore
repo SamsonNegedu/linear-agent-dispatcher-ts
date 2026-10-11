@@ -14,7 +14,6 @@ dist-ssr/
 # Cache directories
 .turbo/
 .nx/
-.eslintcache
 
 # Environment
 .env
@@ -66,3 +65,4 @@ coverage/
 routing.config.json
 
 *.db
+.data/

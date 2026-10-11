@@ -26,6 +26,7 @@
       "@dynamodb/client": ["packages/dynamodb-client/src"],
       "@webhook-verify/core": ["packages/webhook-verify/src"],
       "@webhook-verify/core/*": ["packages/webhook-verify/src/*"],
+      "@linear-agent/env-file": ["packages/env-file/src"],
       "@linear-agent/linear-client": ["packages/linear-client/src"],
       "@linear-agent/linear-client/*": ["packages/linear-client/src/*"],
       "@dispatcher/*": ["services/dispatcher-service/src/*"],

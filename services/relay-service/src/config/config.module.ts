@@ -6,7 +6,7 @@ import { loadRelayConfig } from './relay-config';
   providers: [
     {
       provide: 'RelayServiceConfig',
-      useValue: loadRelayConfig(),
+      useFactory: loadRelayConfig,
     },
   ],
   exports: ['RelayServiceConfig'],

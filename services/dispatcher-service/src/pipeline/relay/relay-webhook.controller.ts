@@ -11,7 +11,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { verifyWebhookSignature } from '@webhook-verify/core';
-import type { VerifiedEvent } from '@webhook-verify/core';
+import type { NormalizedEvent } from '@webhook-verify/core';
 import { WebhookQueueService } from './webhook-queue.service';
 import type { DispatcherConfig } from '../../config/config';
 
@@ -28,7 +28,7 @@ export class RelayWebhookController {
   @HttpCode(200)
   async receiveRelayWebhook(
     @Headers('x-relay-signature') signature: string,
-    @Body() payload: VerifiedEvent,
+    @Body() payload: NormalizedEvent,
     @RawBody() rawBody: Buffer,
   ) {
     if (!signature) {

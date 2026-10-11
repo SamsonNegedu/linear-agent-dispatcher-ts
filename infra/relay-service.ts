@@ -3,7 +3,7 @@ import { getRelayTableDefinition } from './relay-service-table.definition';
 
 export const RelayService = ({ stack }: StackContext) => {
   // Secrets (Linear OAuth credentials, stored in AWS Secrets Manager)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+  // oxlint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
   const linearOAuthSecret = new Secret(stack, 'LinearOAuthSecret', {
     name: `${stack.stackName}/linear-oauth`,
   });

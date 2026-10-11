@@ -32,7 +32,7 @@ export class RunEntity {
   skill!: string;
 
   @Column('varchar', { length: 20 })
-  status!: 'pending' | 'running' | 'succeeded' | 'failed';
+  status!: 'pending' | 'running' | 'succeeded' | 'failed' | 'needs_input';
 
   @Column('varchar', { length: 255, nullable: true })
   claudeSessionId?: string;

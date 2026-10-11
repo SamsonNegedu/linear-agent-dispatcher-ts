@@ -1,150 +1,119 @@
 # Getting the Dispatcher Running
 
-Everything you need, in order, from a clean checkout to a dispatcher that picks up Linear issues and runs Claude against them. Follow steps 1–6 straight through — nothing here requires jumping to another doc.
-
-Every dispatcher receives Linear events through a relay — there's no direct Linear-to-dispatcher webhook path. The only decision you'll make is in step 4: connect to a relay you run yourself (solo dev, fastest) or one already deployed for the team.
-
 ## 1. Prerequisites
 
-- Node.js 24+, pnpm 9+
-- The `claude` CLI installed and authenticated (`claude` on your `$PATH` — check with `which claude`; log in once with `claude` if you haven't)
-- From the repo root: `pnpm install`
+- Node.js 24+, pnpm 9+, Docker, [bun](https://bun.sh) (for the monitor TUI)
+- `claude` CLI on your `$PATH` and logged in
+- Optional: [Tailscale](https://tailscale.com/download) for a stable public URL (see below)
+- A Linear OAuth app (client ID, client secret, webhook secret)
 
-## 2. Create your env file
+## 2. Run
+
+```bash
+pnpm install
+pnpm dev:up        # from the repo root
+```
+
+`pnpm dev:up` does everything:
+
+1. Starts DynamoDB Local (Docker) and a public tunnel (Tailscale Funnel, Cloudflare, or a quick tunnel), and creates the table
+2. Starts the relay with the tunnel as its public URL
+3. Asks once for your Linear credentials (saved to `services/relay-service/.env.local`)
+4. Opens your browser to authorize Linear (first run only; saves `RELAY_SUBSCRIBER_SECRET`)
+5. Starts the dispatcher and opens the monitor TUI. Quit the TUI or press Ctrl-C to stop everything
+
+Credentials and the subscriber secret are written to `.env.local` files readable only by you (mode `0600`). Flags: `pnpm dev:up -- --reconnect` forces the Linear authorize step again.
+
+It prints the webhook and OAuth callback URLs to paste into your Linear app. Logs: `logs/relay.log`, `services/dispatcher-service/logs/server.log`.
+
+### Stable URLs (recommended)
+
+Without a stable URL you must update Linear every run. Easiest fix, free and no domain needed: install [Tailscale](https://tailscale.com/download), run `tailscale up` once, and enable Funnel for your tailnet. `pnpm dev:up` then uses `https://<machine>.<tailnet>.ts.net` automatically.
+
+Alternative: a Cloudflare named tunnel (needs a domain). Route a hostname to `http://host.docker.internal:<relay-port>` and set `CLOUDFLARE_TUNNEL_TOKEN` and `TUNNEL_HOSTNAME` in the root `.env`. This takes priority over Tailscale.
+
+With neither, it falls back to a random quick-tunnel URL.
+
+## 3. Add repos and choose skills
+
+`routing.config.json` lists your repos and which skills a Linear label may trigger. A label `agent-<name>` runs `/<name>` in the repo, but only for skills you list, so nothing else in a repo is exposed to Linear by accident.
+
+```json
+{
+  "skills": ["implement", "fix-bug"],
+  "repositories": [
+    "~/code/api",
+    { "path": "~/code/web", "skills": ["design-review"] }
+  ]
+}
+```
+
+- Top-level `skills` apply to every repo; a repo's own `skills` add to them.
+- A repo's label is its folder name (`api`, `web`).
+- Map a label to a differently named skill with `"issueLabelToSkill": { "agent-build": "implement" }` on the repo.
+
+```bash
+pnpm routes add ~/code/api --skills=implement   # register a repo (lists the skills it has)
+pnpm routes                                     # table of repo / label / skill
+pnpm routes check                               # same, exits 1 if a path or skill is missing
+```
+
+On a Linear issue, set the repo's label (e.g. `api`) plus one mode label (e.g. `agent-implement`). Restart after editing the config. Startup refuses to boot if a repo path or listed skill is missing, and the TUI Dashboard shows each label's skill with ✓/✗. The file has a `$schema` for editor autocomplete.
+
+## 4. The monitor TUI
+
+Tabs: Dashboard (repos and each label's skill, ✓/✗), Logs, Relay, Runs, **Needs input**, Completed, Failed. The header shows live counts and relay status.
+
+| Key | Action |
+|-----|--------|
+| `↑↓` / `1`–`7` | Switch tab |
+| `y` | Copy the selection, or the whole tab, to the clipboard |
+| `m` | Toggle mouse capture (off: select text with the mouse and Cmd+C; on: wheel scroll) |
+| `Ctrl+R` | Restart the dispatcher server in place; the TUI stays up |
+| `q` / `Ctrl+C` | Quit and stop everything |
+
+## 5. Check it works
 
 ```bash
 cd services/dispatcher-service
-cp ../../.env.example .env.local
+pnpm test-webhook -- --issue-id=TEST-1 --label=<repo-label>,agent-implement
 ```
 
-Then edit `.env.local` — everything not listed below has a sane default:
+`--label` takes the repo's label and one mode label, comma-separated (`pnpm routes` lists them). A new run should appear in the TUI. Or assign yourself a Linear issue on a registered team.
 
-| Variable                                    | Required?              | Purpose                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                       | no (default `3000`)     | Port the dispatcher HTTP server listens on                                                                                                                                                                                                                                                                                |
-| `CLAUDE_BIN_PATH`                            | no (default `claude`)   | Path to the Claude CLI binary the executor shells out to                                                                                                                                                                                                                                                                  |
-| `DISPATCHER_DB_PATH`                         | no (default `./data/dispatcher.db`) | SQLite file tracking dispatched runs                                                                                                                                                                                                                                                                          |
-| `MAX_RUN_DURATION`                           | no (default 30 min, in ms) | Timeout per dispatched Claude run                                                                                                                                                                                                                                                                                    |
-| `LINEAR_API_KEY`                             | no (recommended)        | Lets the dispatcher post activity/comments back to Linear once a run is dispatched. Has no effect on whether the dispatcher *receives* events — that's entirely the relay connection in step 4. Skipped (with a warning) if unset                                                                                      |
-| `RELAY_ENABLED` / `RELAY_SUBSCRIBER_SECRET`  | **yes**                 | The only way the dispatcher receives Linear events. Set automatically by `connect-relay` in step 4 — don't hand-edit                                                                                                                                                                                                     |
+## Permissions for unattended runs
 
-## 3. First run (sanity check)
+Runs are headless, so Claude can't ask for approval; anything not allowed is denied (you'd see "the `get_issue` call was denied" in the Linear comment). By default every run gets:
+
+- the core tools (`Read, Edit, Write, Glob, Grep, Bash, Skill, Task, TodoWrite, NotebookEdit`),
+- every MCP server configured for that repo (user, project, plugin and claude.ai connectors; discovered with `claude mcp list` and cached for 10 minutes), so Linear, Playwright and anything you add later just work,
+- `--permission-mode dontAsk`: whatever isn't allowed is denied rather than left undecided.
+
+The repo's `.claude/settings.json` still applies on top, including its `deny` rules. Tune with `CLAUDE_ALLOWED_TOOLS`, `CLAUDE_ALLOW_ALL_MCP=false`, `CLAUDE_PERMISSION_MODE` (see `.env.example`). Issue text is untrusted input and `Bash` is unrestricted, so keep `deny` rules for destructive commands in each repo.
+
+## When a run needs your input
+
+A run is one non-interactive turn, so an agent can't ask a question and wait. A skill that must ask ends its reply with `Stop rule: <reason>`; the dispatcher then marks the run **needs input** (not "succeeded"), posts the question on the Linear issue as an "Action required" comment, and lists it under **Needs input** in the TUI. Answer on the issue, then re-trigger the run (for example by toggling the label). The duplicate-run window (`duplicateRunWindowMs`, default 60s) applies to the retry.
+
+## Troubleshooting
+
+- **Claude never runs**: `which claude` must resolve and `claude` must not prompt for login.
+- **Dispatcher won't start, listing missing repos or skills**: preflight found a repo path or listed skill that doesn't exist. Run `pnpm routes check` to see which, fix the config, or set `PREFLIGHT_SKIP=1` to boot anyway.
+- **"the `<tool>` call was denied" in a Linear comment**: see Permissions for unattended runs; the tool isn't allowed in that repo.
+- **Port already in use on start**: a relay from a previous run is still up; `lsof -ti tcp:<port> | xargs kill`.
+- **Ctrl+R says the server wasn't started by `pnpm monitor`**: the TUI was started on its own; restart the server manually.
+- **Nothing on issue assignment**: check the Linear webhook and callback URLs match the printed tunnel URL.
+- **"Subscriber not found on relay"**: the relay has no record of your saved secret (e.g. wiped DB). Re-run with `pnpm dev:up -- --reconnect`. It also reconnects automatically when the saved relay URL differs from the current tunnel.
+- **Reset local state**: delete `.data/dynamodb` (relay data) and `RELAY_SUBSCRIBER_SECRET`. The relay's registration persists between runs, so a changed tunnel URL needs a re-authorize.
+
+## Manual / team setups
+
+Running against a shared relay, or moving the dispatcher to another server:
 
 ```bash
-pnpm dev
+cd services/dispatcher-service
+pnpm connect-relay --relay-url=<relay> --local-endpoint=<public dispatcher url>
+pnpm update-relay --local-endpoint=https://new-server.com/webhooks/relay   # changed endpoint, no re-auth
 ```
 
-You should see `Application is running on port 3000` with no config validation errors. Confirm with:
-
-```bash
-curl http://localhost:3000/health
-```
-
-If it fails to boot, the error will name the missing/invalid variable directly (see `config-validator.service.ts`) — fix `.env.local` and re-run.
-
-Use `pnpm dev:watch` instead during active development — it recompiles and restarts on file changes.
-
-At this point the dispatcher has no relay connection yet, so it won't receive anything — that's step 4.
-
-## 4. Connect to a relay
-
-### 4a. Get a relay running
-
-**Local relay (solo dev)** — bring one up on your own machine:
-
-```bash
-cd services/relay-service
-cp ../../.env.example .env.local   # fill in LINEAR_OAUTH_CLIENT_ID/SECRET, LINEAR_WEBHOOK_SECRET
-pnpm dev
-```
-
-**Shared relay (team deployment)** — skip the above; ask whoever deployed it for its URL instead. But note: a shared relay runs on AWS, not your machine, so it can't reach `http://localhost:3000` — it needs a publicly reachable URL for your local dispatcher. Expose it with a tunnel first, e.g. [ngrok](https://ngrok.com/):
-
-```bash
-ngrok http 3000
-```
-
-Use the `https://<random>.ngrok.io` URL it prints as `--local-endpoint` below instead of `http://localhost:3000`. (Not needed for a local relay — both processes are on the same machine, so `localhost` works directly.)
-
-### 4b. Run the connector
-
-From `services/dispatcher-service`, run `connect-relay` — it drives the whole Linear OAuth flow for you and writes the resulting secret to `.env.local` automatically, no copy-pasting:
-
-```bash
-pnpm connect-relay \
-  --relay-url=http://localhost:3001 \
-  --local-endpoint=http://localhost:3000 \
-  [--port=3333]
-```
-
-(For a shared relay: `--relay-url=https://relay.example.com --local-endpoint=https://<random>.ngrok.io`.)
-
-- `--relay-url` (required): the relay's URL — `http://localhost:3001` for a local relay, or the deployed URL (e.g. `https://relay.example.com`) for a shared one
-- `--local-endpoint` (required): your dispatcher's public/local base URL (e.g. `http://localhost:3000`). The CLI appends `/webhooks/relay` itself — don't include it
-- `--port` (optional, default `3333`): local port used for the OAuth callback
-
-What happens: it requests an authorization URL from the relay, starts a local callback server, opens your browser to Linear OAuth (or prints the URL if it can't), waits up to 5 minutes for you to authorize, then completes the flow and writes to `.env.local`:
-
-```bash
-RELAY_ENABLED=true
-RELAY_SUBSCRIBER_SECRET=<32-byte-hex-secret>
-```
-
-You're auto-registered for **every Linear team you belong to** under a single secret — one dispatcher instance receives webhooks for all of them.
-
-**If something goes wrong:**
-
-- **Browser doesn't open** — the command prints the authorization URL; copy-paste it into a browser manually, the callback is still handled automatically.
-- **Localhost callback not working** — make sure nothing else is listening on port 3333, or pass `--port=<different-port>`.
-- **Authorization times out** — you have 5 minutes to complete OAuth; just restart the command.
-- **Failed to write `.env.local`** — the command prints the secret; add it manually: `RELAY_SUBSCRIBER_SECRET=<secret>`.
-
-### 4c. Restart the dispatcher
-
-```bash
-pnpm dev
-```
-
-Your dispatcher is now registered for every Linear team you belong to, and the relay will push matching webhooks to `http://localhost:3000`.
-
-## 5. Confirm it's actually working
-
-**Quick check:**
-```bash
-curl http://localhost:3000/status
-```
-Should return relay status and today's run counts.
-
-**Option A: Test without Linear (fastest)**
-```bash
-pnpm test-webhook -- --issue-id=TEST-1 --label=agent-implement
-```
-Watch dispatcher logs; a new run should appear in `data/dispatcher.db`.
-
-**Option B: Real Linear webhook**
-- Assign yourself a Linear issue on a registered team.
-- Watch the dispatcher logs for `Received webhook`.
-- Check `data/dispatcher.db` — a new run row should appear once Claude is dispatched.
-
-## 6. Moving dispatcher to a new server
-
-If you're moving your dispatcher to a different machine or changing its publicly reachable URL, update the relay without re-authenticating:
-
-```bash
-pnpm update-relay --local-endpoint=https://new-server.com/webhooks/relay
-```
-
-The command:
-- Reads your existing `RELAY_SUBSCRIBER_SECRET` from `.env.local` (proof of ownership)
-- Reads the `RELAY_URL` from `.env.local` (where `connect-relay` stored it)
-- Sends a PATCH request to update your subscription endpoint
-- Prints confirmation
-
-No Linear OAuth re-flow, no orphaned subscriptions — the relay just updates your endpoint and you're live on the new server.
-
-## 7. Common issues
-
-- **"RELAY_SUBSCRIBER_SECRET is required when RELAY_ENABLED=true"** — `connect-relay` didn't finish, or wrote to the wrong `.env.local` (make sure you ran it from `services/dispatcher-service`). Re-run `connect-relay`.
-- **Claude never runs** — check `CLAUDE_BIN_PATH` resolves (`which claude`) and that you're authenticated (`claude` should not prompt for login).
-- **Nothing happens on issue assignment** — confirm the relay is reachable and its OAuth app's redirect URI matches its deployment (local or shared), and that `connect-relay` completed (`RELAY_ENABLED=true` in `.env.local`).
-- **`update-relay` fails with "Subscriber not found"** — the `RELAY_SUBSCRIBER_SECRET` in your `.env.local` doesn't match the relay's records. Re-run `pnpm connect-relay` to generate a fresh subscription.
+A shared relay on AWS can't reach `localhost`; expose the dispatcher with a tunnel and pass that URL as `--local-endpoint`.

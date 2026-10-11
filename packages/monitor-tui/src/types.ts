@@ -20,12 +20,14 @@ export interface MonitorSummary {
     running: number;
     succeeded: number;
     failed: number;
+    needs_input: number;
   };
   repos: Array<{
     repoPath: string;
     domainLabel: string;
     description?: string;
-    issueLabelToSkill: Array<{ label: string; skill: string }>;
+    // skillFound: true = on disk, false = missing, null = plugin skill (unchecked)
+    issueLabelToSkill: Array<{ label: string; skill: string; skillFound: boolean | null }>;
     runningCount: number;
     currentRuns: Array<{ issueIdentifier: string; issueTitle?: string }>;
   }>;

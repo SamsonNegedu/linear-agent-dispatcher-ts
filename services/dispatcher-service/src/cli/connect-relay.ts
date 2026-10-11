@@ -1,6 +1,6 @@
 import { createServer, Server, IncomingMessage, ServerResponse } from 'http';
 import { URL } from 'url';
-import * as fs from 'fs';
+import { updateEnvFile } from '@linear-agent/env-file';
 import * as path from 'path';
 import { spawn } from 'child_process';
 
@@ -225,15 +225,13 @@ function step5_saveCredentials(
   console.log('5️⃣  Saving credentials to .env\n');
 
   try {
-    const existing = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, 'utf-8') : '';
-    let updated = upsertEnvVar(existing, 'RELAY_ENABLED', 'true');
-    updated = upsertEnvVar(updated, 'RELAY_SUBSCRIBER_SECRET', secret);
-    updated = upsertEnvVar(updated, 'RELAY_URL', relayUrl);
-    updated = upsertEnvVar(updated, 'RELAY_DISPATCHER_URL', dispatcherUrl);
-    if (subscriberId) {
-      updated = upsertEnvVar(updated, 'RELAY_SUBSCRIBER_ID', subscriberId);
-    }
-    fs.writeFileSync(ENV_PATH, updated);
+    updateEnvFile(ENV_PATH, {
+      RELAY_ENABLED: 'true',
+      RELAY_SUBSCRIBER_SECRET: secret,
+      RELAY_URL: relayUrl,
+      RELAY_DISPATCHER_URL: dispatcherUrl,
+      ...(subscriberId ? { RELAY_SUBSCRIBER_ID: subscriberId } : {}),
+    });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('⚠️  Failed to write .env.local');
@@ -261,27 +259,8 @@ function step6_printSuccess(
   console.log(`   Secret: ${secretDisplay}\n`);
 
   console.log('📝 Next steps:');
-  console.log('   1. Restart your dispatcher: pnpm dev');
-  console.log('   2. Dispatcher will now receive webhooks from all registered teams\n');
-}
-
-/**
- * Set (or replace) a KEY=value line in .env file contents.
- * Matches commented-out placeholder lines too (e.g. `# KEY=`), uncommenting them,
- * so re-running connect-relay against the repo's checked-in .env.local template works.
- */
-function upsertEnvVar(contents: string, key: string, value: string): string {
-  const linePattern = new RegExp(`^#?\\s*${key}=.*$`);
-  const lines = contents.split('\n');
-  const index = lines.findIndex((line) => linePattern.test(line));
-
-  if (index !== -1) {
-    lines[index] = `${key}=${value}`;
-    return lines.join('\n');
-  }
-
-  const withNewline = contents.length > 0 && !contents.endsWith('\n') ? contents + '\n' : contents;
-  return `${withNewline}${key}=${value}\n`;
+  console.log('   Start (or restart) the dispatcher; it will receive webhooks from all registered teams.');
+  console.log('   Tip: from the repo root, `pnpm dev:up` does all of this for you.\n');
 }
 
 /**

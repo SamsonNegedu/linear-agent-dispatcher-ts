@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import type { IStoreRepository } from '../../store/store.interfaces';
-import type { VerifiedEvent } from '@webhook-verify/core';
+import type { NormalizedEvent } from '@webhook-verify/core';
 import { ActivityNotifierService } from './activity-notifier.service';
 import { ClaudeAgentService } from './claude-agent.service';
 import { IssueCommentService } from './issue-comment.service';
@@ -16,7 +16,7 @@ export class ExecutorService {
     private readonly issueComments: IssueCommentService,
   ) {}
 
-  async executeRun(runId: string, event: VerifiedEvent): Promise<void> {
+  async executeRun(runId: string, event: NormalizedEvent): Promise<void> {
     const run = await this.store.getRun(runId);
     if (!run) {
       this.logger.error(`Run not found: ${runId}`);
@@ -55,6 +55,8 @@ export class ExecutorService {
 
       if (result.status === 'succeeded') {
         this.logger.log(`Run completed: ${runId} (${result.status})`);
+      } else if (result.status === 'needs_input') {
+        this.logger.warn(`[NEEDS_ATTENTION] Run stopped to ask: ${runId} - ${result.errorSnippet}`);
       } else {
         const reason = result.errorSnippet || `exit code ${result.exitCode}`;
         this.logger.error(`Run completed: ${runId} (${result.status}) - ${reason}`);
@@ -68,12 +70,16 @@ export class ExecutorService {
       if (run.providerSessionId) {
         if (result.status === 'succeeded') {
           await this.activityNotifier.postSuccess(run.providerSessionId, summary);
+        } else if (result.status === 'needs_input') {
+          await this.activityNotifier.postElicitation(run.providerSessionId, summary);
         } else {
           await this.activityNotifier.postError(run.providerSessionId, failureMessage);
         }
       } else {
         if (result.status === 'succeeded') {
           await this.issueComments.postSuccess(run.issueId, summary);
+        } else if (result.status === 'needs_input') {
+          await this.issueComments.postRequired(run.issueId, summary);
         } else {
           await this.issueComments.postFailure(run.issueId, failureMessage);
         }

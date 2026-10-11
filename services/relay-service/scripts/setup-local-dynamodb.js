@@ -8,6 +8,7 @@
  * this script mirrors that same schema for local dev, where nothing provisions
  * it automatically. Safe to re-run: skips the table if it already exists.
  */
+const dotenv = require('dotenv');
 const {
   DynamoDBClient,
   CreateTableCommand,
@@ -15,6 +16,9 @@ const {
   ListTablesCommand,
   DeleteTableCommand,
 } = require('@aws-sdk/client-dynamodb');
+
+dotenv.config({ path: '.env' });
+dotenv.config({ path: '.env.local', override: true });
 
 const endpoint = process.env.DYNAMODB_ENDPOINT || 'http://localhost:8000';
 const region = process.env.DYNAMODB_REGION || 'us-east-1';

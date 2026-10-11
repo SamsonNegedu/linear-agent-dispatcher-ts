@@ -4,6 +4,8 @@
 
 **Date:** 2026-07-17
 
+**Amended:** 2026-10-12 — added "Unattended execution" (permissions, and stopping to ask).
+
 ## Context
 
 [ADR 0003](0003-webhook-routing-and-delivery.md) documents the relay's
@@ -85,6 +87,33 @@ running `SIGKILL_GRACE_MS` (10s) later, `SIGKILL` follows. Both signals go
 through a guarded helper — `process.kill()` throws synchronously if the
 target has already exited, and an uncaught throw inside a bare `setTimeout`
 callback would crash the whole dispatcher process, not just the one run.
+
+### Unattended execution: permissions, and stopping to ask
+
+A run is one headless `claude -p` turn, so nobody can answer a permission prompt
+or a clarifying question. Both used to fail confusingly: a tool the repo hadn't
+allow-listed was denied ("the `get_issue` call was denied"), and an agent that
+ended its reply with a question was recorded as `succeeded`.
+
+**Permissions.** Each run is started with `--allowedTools` and
+`--permission-mode dontAsk`. The allowed set is the core tools
+(`Read, Edit, Write, Glob, Grep, Bash, Skill, Task, TodoWrite, NotebookEdit`) plus every
+MCP server configured for that repo, discovered with `claude mcp list` (user,
+project, plugin and claude.ai connector servers alike) and cached per repo for 10
+minutes, so a newly added server works with no per-tool lists. `dontAsk` makes
+anything not allowed fail deterministically instead of waiting for a prompt. The repo's own
+`.claude/settings.json` still applies, including its `deny` rules. Tunable with
+`CLAUDE_ALLOWED_TOOLS`, `CLAUDE_ALLOW_ALL_MCP=false` and `CLAUDE_PERMISSION_MODE`.
+`bypassPermissions` was rejected: it is documented for sandboxes only, and issue
+text is untrusted input.
+
+**Stopping to ask.** A skill that must ask begins its final reply with
+`Stop rule:`. The dispatcher records such a run as `needs_input` (a terminal status
+distinct from `succeeded` and `failed`), posts the reply on the Linear issue as an
+"Action required" comment (an elicitation for agent sessions), and logs
+`[NEEDS_ATTENTION]`. The monitor TUI lists these runs under **Needs input**. The
+answer is given on the issue and the run re-triggered; the dispatcher does not resume
+it. The duplicate-run window applies as usual.
 
 ## Consequences
 
