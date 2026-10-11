@@ -1,5 +1,5 @@
 import { Module, Provider } from '@nestjs/common';
-import { DynamoDBModule } from '@dynamodb/client';
+import { RelayDatabaseModule } from '../database/relay-database.module';
 import { AdapterRegistry } from '@webhook-verify/core';
 import type { WebhookIngestAdapter, RoutingResolver } from '@webhook-verify/core';
 import { LinearIngestAdapter } from '@webhook-verify/core/linear';
@@ -46,7 +46,7 @@ const routingResolverRegistryProvider: Provider = {
 };
 
 @Module({
-  imports: [DynamoDBModule, SubscriberModule],
+  imports: [RelayDatabaseModule, SubscriberModule],
   controllers: [WebhookController],
   providers: [
     webhookDeliveriesProvider,

@@ -11,6 +11,7 @@ import {
 import type { IStoreRepository } from '../../store/store.interfaces';
 import type { DispatcherConfig } from '../../config/config';
 import { RelayHealthService } from '../../pipeline/relay/relay-health.service';
+import { errorMessage } from '../../common/error-message';
 
 @Controller()
 export class HealthController {
@@ -31,7 +32,7 @@ export class HealthController {
     } catch (error) {
       this.logger.error('Health check failed:', error);
       throw new HttpException(
-        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 'error', error: errorMessage(error) },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
@@ -57,7 +58,7 @@ export class HealthController {
     } catch (error) {
       this.logger.error('Status check failed:', error);
       throw new HttpException(
-        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 'error', error: errorMessage(error) },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }

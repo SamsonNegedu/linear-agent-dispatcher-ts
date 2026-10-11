@@ -21,9 +21,6 @@
     "noEmitOnError": false,
     "typeRoots": ["./node_modules/@types"],
     "paths": {
-      "@api-gateway/serverless-express": ["packages/api-gateway/src"],
-      "@api-gateway/serverless-express/*": ["packages/api-gateway/src/*"],
-      "@dynamodb/client": ["packages/dynamodb-client/src"],
       "@webhook-verify/core": ["packages/webhook-verify/src"],
       "@webhook-verify/core/*": ["packages/webhook-verify/src/*"],
       "@linear-agent/env-file": ["packages/env-file/src"],
@@ -33,6 +30,6 @@
       "@relay/*": ["services/relay-service/src/*"]
     }
   },
-  "include": ["packages/*/src", "services/*/src", "infra/**/*.ts", "sst.config.ts"],
+  "include": ["packages/*/src", "services/*/src"],
   "exclude": ["node_modules", "dist"]
 }

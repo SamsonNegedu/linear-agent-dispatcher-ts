@@ -65,7 +65,7 @@ Implement a two-stage OAuth + HMAC flow:
 
 - **Complexity**: three-stage flow with two secrets (OAuth token + HMAC key)
 - **Token rotation**: relay must handle OAuth token refresh
-- **Operator burden**: need to securely manage AWS Secrets Manager and secret rotation policy
+- **Operator burden**: the operator must keep the relay's OAuth credentials and the subscriber secrets safe
 
 ## Alternatives Considered
 
@@ -87,7 +87,7 @@ existence itself, already decided and rejected in
 ## Implementation Notes
 
 - Relay's Linear OAuth app credentials (`LINEAR_OAUTH_CLIENT_ID`/`_SECRET`) are
-  plain environment variables today, not AWS Secrets Manager — no rotation
+  plain environment variables in a `.env.local` readable only by the owner — no rotation
   mechanism exists. Acceptable at current scale; revisit if this ever moves
   beyond a single-operator deployment.
 - Subscriber secret is a randomly generated 32+ byte key
@@ -95,5 +95,7 @@ existence itself, already decided and rejected in
 - Callback URL: `{relay_url}/callback` — a top-level route, not nested under
   `/subscribers`, so it can match whatever redirect URI is registered with
   the Linear OAuth application regardless of API path structure
-- Registration endpoint: `POST {relay_url}/subscribers/register` (dispatcher-initiated)
+- Registration happens only through the OAuth callback. An earlier unauthenticated `POST /subscribers/register` was removed: anyone who could reach the relay could register as, or overwrite, any team/user subscriber and receive their webhooks.
+- Changing a subscription's delivery URL (`PATCH /subscribers`) requires the subscriber's id **and** secret (compared in constant time). Subscriber ids are guessable (`<team>:<linearUserId>`), so they are identifiers, not credentials. An unknown id and a wrong secret get the same 401.
+- Delivery URLs must be `https://` to a public host (or `http://localhost`); private, loopback, link-local and cloud-metadata addresses are rejected so a registered URL can't point the relay at internal services. DNS names that resolve to private addresses are not checked.
 - Webhook delivery includes `X-Linear-Signature` (from Linear) and `X-Dispatcher-Signature` (from relay)

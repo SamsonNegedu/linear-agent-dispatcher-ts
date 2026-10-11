@@ -2,57 +2,58 @@
 
 Automatically run Claude on Linear issues assigned to you — no manual prompts, full audit trail.
 
-A production-grade NestJS/AWS serverless dispatcher that routes Linear webhooks to Claude, with portable data layer (SQL/DynamoDB) and optional team-shared relay.
+A local relay receives Linear's webhooks and fans them out to local dispatchers (NestJS), which run Claude in your repos. Everything runs on your machine; state lives in SQLite files.
 
 ## Key Features
 
-- **Portable data layer** — SQL (SQLite/PostgreSQL) or DynamoDB, config-based switching
-- **Webhook relay** — One relay subscription for the whole team; events routed by Linear user assignment, secured with Linear OAuth and HMAC signatures
-- **Local & team modes** — run solo with a local relay, or share one relay deployment across a team
+- **Skills as the interface** — a Linear label `agent-<name>` runs the repo's `/<name>` skill, only for skills you list
+- **Webhook relay** — one Linear OAuth app, events routed by team and assignee, signed per subscriber (HMAC-SHA256)
+- **Unattended runs** — headless Claude with a controlled tool set; a run that must ask a question stops and posts it to the issue
+- **Monitor TUI** — runs, logs, relay status and repo/skill mappings in the terminal
 
 ## Getting Started
 
-**Prerequisites:** Node.js 24+, pnpm 9+, Docker, Bun (for the monitor TUI), a Linear OAuth app, the Claude CLI
+**Prerequisites:** Node.js 24+, pnpm 9+, Bun (for the monitor TUI), a Linear OAuth app, the Claude CLI, and Tailscale (recommended) or `cloudflared` to expose the relay
 
 ```bash
 pnpm install
-pnpm dev:up      # DynamoDB Local + tunnel + relay + Linear connect + dispatcher + monitor TUI
+pnpm dev:up      # tunnel + relay + Linear connect + dispatcher + monitor TUI
 ```
 
-→ See [GETTING_STARTED.md](services/dispatcher-service/GETTING_STARTED.md) for the full step-by-step setup, environment variables, testing, deployment, and troubleshooting.
+→ See [GETTING_STARTED.md](services/dispatcher-service/GETTING_STARTED.md) for the full step-by-step setup, environment variables, testing and troubleshooting.
 
 ## Architecture
 
 ```
-Linear webhook → Relay (local or AWS Lambda) → HTTP POST → Dispatcher → Claude CLI → Linear API
+Linear webhook → Relay (local, behind a tunnel) → HTTP POST → Dispatcher → Claude CLI → Linear API
 ```
 
-Every dispatcher sits behind a relay. The difference between solo dev and team deployment is only whether the relay runs locally or in AWS.
+Every dispatcher sits behind a relay. `pnpm dev:up` starts both on your machine. See [docs/adr](docs/adr/README.md) for the reasoning.
 
 ## Relay Service API
 
-| Method  | Endpoint                  | Purpose                                          |
-| ------- | ------------------------- | ------------------------------------------------ |
-| `GET`   | `/subscribers/auth/start` | Start OAuth authorization flow                   |
-| `GET`   | `/callback`               | OAuth callback (auto-registers all user's teams) |
-| `POST`  | `/subscribers/register`   | Manual subscriber registration                   |
-| `PATCH` | `/subscribers`            | Update existing subscription endpoint            |
-| `POST`  | `/webhooks/linear`        | Receive webhooks from Linear                     |
+| Method  | Endpoint                  | Purpose                                                                        |
+| ------- | ------------------------- | ------------------------------------------------------------------------------ |
+| `GET`   | `/subscribers/auth/start` | Start OAuth authorization flow                                                 |
+| `GET`   | `/callback`               | OAuth callback (registers all of the user's teams)                             |
+| `GET`   | `/subscribers/:id`        | Does this subscriber still exist? (no secret or endpoint returned)             |
+| `PATCH` | `/subscribers`            | Move a subscription to a new endpoint (needs the subscriber id **and** secret) |
+| `POST`  | `/webhooks/linear`        | Receive webhooks from Linear                                                   |
 
-**See [GETTING_STARTED.md](services/dispatcher-service/GETTING_STARTED.md) for full endpoint documentation and examples.**
+See the [relay README](services/relay-service/README.md) for details.
 
 ## CLI Commands
 
-| Command                             | Purpose                                                                                                              |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev:up`                       | One command for local dev: infra, tunnel, relay, Linear connect, dispatcher and TUI (`-- --reconnect` re-authorizes) |
-| `pnpm routes`                       | Show repo → label → skill mappings (`routes check` exits 1 on a problem, `routes add <path>` registers a repo)       |
-| `pnpm connect-relay`                | Register a dispatcher with a shared relay (OAuth flow); `dev:up` does this for you locally                           |
-| `pnpm update-relay`                 | Move dispatcher to new server (update endpoint without re-auth)                                                      |
-| `pnpm test-webhook`                 | Test dispatch without a Linear issue                                                                                 |
-| `pnpm dev`                          | Start relay and dispatcher without the tunnel or TUI                                                                 |
-| `pnpm lint` / `pnpm lint:fix`       | [oxlint](https://oxc.rs/docs/guide/usage/linter)                                                                     |
-| `pnpm format` / `pnpm format:check` | [oxfmt](https://oxc.rs/docs/guide/usage/formatter)                                                                   |
+| Command                             | Purpose                                                                                                        |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev:up`                       | One command for local dev: tunnel, relay, Linear connect, dispatcher and TUI (`-- --reconnect` re-authorizes)  |
+| `pnpm routes`                       | Show repo → label → skill mappings (`routes check` exits 1 on a problem, `routes add <path>` registers a repo) |
+| `pnpm connect-relay`                | Register a dispatcher with a relay by hand (OAuth flow); `dev:up` does this for you locally                    |
+| `pnpm update-relay`                 | Move dispatcher to new server (update endpoint without re-auth)                                                |
+| `pnpm test-webhook`                 | Test dispatch without a Linear issue                                                                           |
+| `pnpm dev`                          | Start relay and dispatcher without the tunnel or TUI                                                           |
+| `pnpm lint` / `pnpm lint:fix`       | [oxlint](https://oxc.rs/docs/guide/usage/linter)                                                               |
+| `pnpm format` / `pnpm format:check` | [oxfmt](https://oxc.rs/docs/guide/usage/formatter)                                                             |
 
 ## Monitor TUI
 
@@ -70,9 +71,10 @@ A terminal dashboard (`packages/monitor-tui`, built with Bun + React + [OpenTUI]
 
 ## Security
 
-Webhook verification (HMAC-SHA256) and relay authentication (Linear OAuth) are covered above. Beyond that:
-
-- **Audit trail**: All deliveries logged with 30-day retention (TTL)
+- Webhooks from Linear are verified (HMAC-SHA256); relay → dispatcher deliveries are signed per subscriber.
+- Subscriber changes need the subscriber's secret, and delivery URLs must be public `https://` addresses (private, loopback and cloud-metadata addresses are rejected).
+- `.env.local` files are created readable only by you (mode `0600`).
+- **Audit trail**: all deliveries are logged for 30 days.
 
 ## Development
 
@@ -88,13 +90,10 @@ pnpm format           # oxfmt
 
 ```
 linear-agent-ts/
-├── sst.config.ts              # Infrastructure as code (SST v2)
-├── packages/                  # Shared workspace packages (api-gateway, linear-client,
-│                               #   dynamodb-client, webhook-verify, env-file, monitor-tui, ...)
-├── scripts/                   # dev-up.mjs (one-command startup) and lib/stack.mjs
-├── docker-compose.yml         # DynamoDB Local + Cloudflare tunnel profiles for dev:up
+├── packages/                  # Shared packages: linear-client, webhook-verify, env-file, monitor-tui
+├── scripts/                   # dev-up.mjs (one-command startup), lib/stack.mjs, lib/tunnel.mjs
 ├── services/
-│   ├── dispatcher-service/    # NestJS app: local dispatcher
-│   └── relay-service/         # Lambda handlers: serverless webhook relay
-└── infra/                     # SST stack definitions
+│   ├── dispatcher-service/    # NestJS app: receives deliveries and runs Claude
+│   └── relay-service/         # NestJS app: Linear OAuth + webhook fan-out (SQLite)
+└── docs/adr/                  # Architecture decision records
 ```

@@ -1,11 +1,9 @@
 import { join } from 'path';
 import { parseArgs, type ParseArgsConfig } from 'util';
+import { errorMessage } from '../common/error-message';
 
 /** A failure whose message is the whole story (bad flags, missing file): no stack, exit 1. */
 export class CliError extends Error {}
-
-export const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 /** The dispatcher's local env file; CLIs run from services/dispatcher-service. */
 export const envFilePath = (): string => join(process.cwd(), '.env.local');

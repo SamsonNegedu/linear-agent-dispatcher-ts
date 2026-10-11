@@ -23,7 +23,7 @@ decide, in order:
 These were originally two separate ADRs. They're merged here because they're
 two sequential steps of the same function (`DispatcherService.dispatchWebhook()`),
 not independently-reversible decisions — same reasoning as ADR 0001 absorbing
-the relay's Lambda/DynamoDB/NestJS choices into one record instead of three.
+the relay's hosting, storage and framework choices into one record instead of three.
 
 ### Why trigger semantics needed fixing
 

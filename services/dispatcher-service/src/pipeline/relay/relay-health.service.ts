@@ -1,5 +1,6 @@
 import { Injectable, Inject, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import type { DispatcherConfig } from '../../config/config';
+import { errorMessage } from '../../common/error-message';
 
 // How often to re-verify the subscriber against relay-service while the
 // process stays up. Deliberately independent of (and much slower than) the
@@ -89,7 +90,7 @@ export class RelayHealthService implements OnModuleInit, OnModuleDestroy {
         signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
       });
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const errorMsg = errorMessage(error);
       this.logger.warn(`Relay-service unreachable: ${errorMsg}`);
       this.setStatus('unreachable', errorMsg);
       return;

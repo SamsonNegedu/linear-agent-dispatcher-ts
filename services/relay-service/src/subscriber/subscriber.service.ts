@@ -71,13 +71,6 @@ export class SubscriberService {
     return this.registry.deleteStaleSubscribers(olderThanMs);
   }
 
-  async updateSubscriberEndpoint(
-    subscriberSecret: string,
-    newEndpoint: string,
-  ): Promise<SubscriberRecord | null> {
-    return this.registry.updateEndpointBySecret(subscriberSecret, newEndpoint);
-  }
-
   async updateSubscriberEndpointById(
     subscriberId: string,
     newEndpoint: string,

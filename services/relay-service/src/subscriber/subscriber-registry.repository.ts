@@ -1,47 +1,48 @@
-import { DynamoClient } from '@dynamodb/client';
 import { randomBytes } from 'crypto';
+import type { RelayDatabase } from '../database/relay-database';
 import { SubscriberRecord } from './types';
 
-// Single-table design: subscribers share the relay table with webhook
-// deliveries (see infra/relay-service-table.definition.ts). GSI1 is shared
-// across both entity types for their team-scoped queries.
-const pKey = (subscriberId: string) => `SUBSCRIBER#${subscriberId}`;
-const sKey = (_subscriberId: string) => 'METADATA'; // Sort key: distinguish record type if needed in future
-const gsi1pKey = (teamKey: string) => `TEAM#${teamKey}`;
-const gsi1sKey = (subscriberId: string) => `SUBSCRIBER#${subscriberId}#ACTIVE`; // Allows future filtering by status
+interface SubscriberRow {
+  subscriber_id: string;
+  team_key: string;
+  linear_user_id: string;
+  domains: string;
+  local_endpoint: string;
+  subscriber_secret: string;
+  registered_at: string;
+  last_seen_at: string;
+  last_webhook_at: string | null;
+  version: number;
+}
+
+const toRecord = (row: SubscriberRow): SubscriberRecord => ({
+  subscriberId: row.subscriber_id,
+  teamKey: row.team_key,
+  linearUserId: row.linear_user_id,
+  domains: new Set(JSON.parse(row.domains) as string[]),
+  localEndpoint: row.local_endpoint,
+  subscriberSecret: row.subscriber_secret,
+  registeredAt: row.registered_at,
+  lastSeenAt: row.last_seen_at,
+  lastWebhookAt: row.last_webhook_at ?? undefined,
+  version: row.version,
+});
 
 export class SubscriberRegistry {
-  constructor(
-    private readonly client: DynamoClient,
-    private readonly tableName: string,
-  ) {}
+  constructor(private readonly db: RelayDatabase) {}
 
   async getSubscriber(subscriberId: string): Promise<SubscriberRecord | null> {
-    const item = await this.client.getItem<Record<string, unknown>>(
-      this.tableName,
-      { pKey: pKey(subscriberId), sKey: sKey(subscriberId) },
-      /* removeKeys */ false,
-    );
-
-    if (!item) {
-      return null;
-    }
-
-    return this.fromDynamoItem(item);
+    const row = this.db
+      .prepare('SELECT * FROM subscribers WHERE subscriber_id = ?')
+      .get(subscriberId);
+    return row ? toRecord(row as SubscriberRow) : null;
   }
 
   async getSubscribersByTeam(teamKey: string): Promise<SubscriberRecord[]> {
-    const items = await this.client.queryItems<Record<string, unknown>>({
-      TableName: this.tableName,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1pKey = :gsi1pKey AND begins_with(GSI1sKey, :prefix)',
-      ExpressionAttributeValues: {
-        ':gsi1pKey': gsi1pKey(teamKey),
-        ':prefix': 'SUBSCRIBER#',
-      },
-    });
-
-    return (items || []).map((item) => this.fromDynamoItem(item));
+    const rows = this.db
+      .prepare('SELECT * FROM subscribers WHERE team_key = ? ORDER BY subscriber_id')
+      .all(teamKey);
+    return (rows as SubscriberRow[]).map(toRecord);
   }
 
   async getSubscribersByTeamAndAssignee(
@@ -60,131 +61,75 @@ export class SubscriberRegistry {
 
     const subscriber: SubscriberRecord = {
       ...record,
-      registeredAt: existing?.registeredAt || now,
+      registeredAt: existing?.registeredAt ?? now,
       lastSeenAt: now,
-      lastWebhookAt: existing?.lastWebhookAt, // Preserve lastWebhookAt on re-register
-      version: (existing?.version || 0) + 1,
+      lastWebhookAt: existing?.lastWebhookAt, // kept when the same subscriber re-registers
+      version: (existing?.version ?? 0) + 1,
     };
-
-    await this.client.putItem(this.tableName, this.toDynamoItem(subscriber));
-
+    this.save(subscriber);
     return subscriber;
   }
 
   async markWebhookDelivered(subscriberId: string): Promise<void> {
-    await this.client.updateItem(
-      this.tableName,
-      { pKey: pKey(subscriberId), sKey: sKey(subscriberId) },
-      { lastWebhookAt: new Date().toISOString() },
-    );
+    this.db
+      .prepare('UPDATE subscribers SET last_webhook_at = ? WHERE subscriber_id = ?')
+      .run(new Date().toISOString(), subscriberId);
   }
 
   async updateEndpointById(
     subscriberId: string,
     newEndpoint: string,
   ): Promise<SubscriberRecord | null> {
-    // Direct lookup by subscriber ID — no scan needed
     const subscriber = await this.getSubscriber(subscriberId);
-    if (!subscriber) {
-      return null;
-    }
+    if (!subscriber) return null;
 
-    // Update the endpoint
     const updated: SubscriberRecord = {
       ...subscriber,
       localEndpoint: newEndpoint,
       lastSeenAt: new Date().toISOString(),
       version: subscriber.version + 1,
     };
-
-    await this.client.putItem(this.tableName, this.toDynamoItem(updated));
+    this.save(updated);
     return updated;
   }
 
-  updateEndpointBySecret(
-    _subscriberSecret: string,
-    _newEndpoint: string,
-  ): Promise<SubscriberRecord | null> {
-    // Looking up by secret requires scanning the entire table (no index exists).
-    // Use updateEndpointById instead and save RELAY_SUBSCRIBER_ID in .env.local.
-    // If ID not available, re-run pnpm connect-relay to get it.
-    return Promise.reject(
-      new Error(
-        'Updating by secret is not supported. Use subscriberId instead. ' +
-          'Run pnpm connect-relay again to save RELAY_SUBSCRIBER_ID to .env.local.',
-      ),
-    );
-  }
-
   async deleteSubscriber(subscriberId: string): Promise<void> {
-    await this.client.delete({
-      TableName: this.tableName,
-      Key: { pKey: pKey(subscriberId), sKey: sKey(subscriberId) },
-    });
+    this.db.prepare('DELETE FROM subscribers WHERE subscriber_id = ?').run(subscriberId);
   }
 
+  /**
+   * Deletes subscribers whose latest activity (last delivered webhook, else registration) is
+   * older than `olderThanMs`. Returns how many were deleted.
+   */
   async deleteStaleSubscribers(olderThanMs: number): Promise<number> {
-    const cutoffTime = new Date(Date.now() - olderThanMs).toISOString();
-
-    // Query all subscribers by scanning primary table (fallback for cleanup batch job)
-    // In production, pair this with CloudWatch alarms to monitor cleanup lag.
-    // For high-frequency cleanup, use a dedicated "stale queue" or mark-and-sweep approach.
-    const result = await this.client.query({
-      TableName: this.tableName,
-      KeyConditionExpression: 'begins_with(pKey, :prefix)',
-      ExpressionAttributeValues: {
-        ':prefix': 'SUBSCRIBER#',
-      },
-    });
-
-    const subscribers = (result.Items || []).map((item) =>
-      this.fromDynamoItem(item as Record<string, unknown>),
-    );
-
-    let deleted = 0;
-    for (const subscriber of subscribers) {
-      // Use lastWebhookAt if set (webhook has been delivered), otherwise fall back to lastSeenAt (registration time).
-      // Delete only if the most recent activity (whichever is later) is older than cutoff.
-      const mostRecentActivity = subscriber.lastWebhookAt || subscriber.lastSeenAt;
-      if (mostRecentActivity < cutoffTime) {
-        await this.deleteSubscriber(subscriber.subscriberId);
-        deleted++;
-      }
-    }
-
-    return deleted;
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    return this.db
+      .prepare('DELETE FROM subscribers WHERE COALESCE(last_webhook_at, last_seen_at) < ?')
+      .run(cutoff).changes;
   }
 
   generateSubscriberSecret(): string {
     return randomBytes(32).toString('hex');
   }
 
-  private toDynamoItem(subscriber: SubscriberRecord): Record<string, unknown> {
-    return {
-      pKey: pKey(subscriber.subscriberId),
-      sKey: sKey(subscriber.subscriberId),
-      GSI1pKey: gsi1pKey(subscriber.teamKey),
-      GSI1sKey: gsi1sKey(subscriber.subscriberId),
-      ...subscriber,
-      // Stored as a DynamoDB List (plain array), not a native Set — Sets
-      // cannot be empty in DynamoDB, and this field is legitimately empty
-      // most of the time, so a List avoids that restriction entirely.
-      domains: Array.from(subscriber.domains),
-    };
-  }
-
-  private fromDynamoItem(item: Record<string, unknown>): SubscriberRecord {
-    return {
-      subscriberId: item.subscriberId as string,
-      teamKey: item.teamKey as string,
-      linearUserId: item.linearUserId as string,
-      domains: new Set((item.domains as string[]) || []),
-      localEndpoint: item.localEndpoint as string,
-      subscriberSecret: item.subscriberSecret as string,
-      registeredAt: item.registeredAt as string,
-      lastSeenAt: item.lastSeenAt as string,
-      lastWebhookAt: item.lastWebhookAt as string | undefined,
-      version: item.version as number,
-    };
+  private save(subscriber: SubscriberRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO subscribers (subscriber_id, team_key, linear_user_id, domains, local_endpoint,
+           subscriber_secret, registered_at, last_seen_at, last_webhook_at, version)
+         VALUES (@subscriberId, @teamKey, @linearUserId, @domains, @localEndpoint,
+           @subscriberSecret, @registeredAt, @lastSeenAt, @lastWebhookAt, @version)
+         ON CONFLICT(subscriber_id) DO UPDATE SET
+           team_key = excluded.team_key, linear_user_id = excluded.linear_user_id,
+           domains = excluded.domains, local_endpoint = excluded.local_endpoint,
+           subscriber_secret = excluded.subscriber_secret, registered_at = excluded.registered_at,
+           last_seen_at = excluded.last_seen_at, last_webhook_at = excluded.last_webhook_at,
+           version = excluded.version`,
+      )
+      .run({
+        ...subscriber,
+        domains: JSON.stringify([...subscriber.domains]),
+        lastWebhookAt: subscriber.lastWebhookAt ?? null,
+      });
   }
 }

@@ -8,6 +8,7 @@ import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import { StoreModule } from '../../../store/store.module';
 import { DispatcherConfigModule } from '../../../config/dispatcher-config.module';
 import type { DispatcherConfig } from '../../../config/config';
+import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 
 jest.mock('child_process');
 
@@ -19,21 +20,16 @@ class FakeChildProcess extends EventEmitter {
   pid = 1234;
 }
 
-function makeConfig(overrides: Partial<DispatcherConfig['executor']> = {}): DispatcherConfig {
-  return {
-    relay: { enabled: false },
-    server: { port: 3000, globalPrefix: '' },
+const makeConfig = (overrides: Partial<DispatcherConfig['executor']> = {}): DispatcherConfig =>
+  makeDispatcherConfig({
     executor: {
       claudeBinPath: 'claude',
       allowedEnvVars: ['PATH'],
       timeout: 1_800_000,
       ...overrides,
     },
-    database: { path: './data/dispatcher.db', synchronize: true, logging: false },
     linear: {},
-    preflight: { skip: false },
-  };
-}
+  });
 
 const mcpAllowRules = jest.fn<Promise<string[]>, [string]>();
 

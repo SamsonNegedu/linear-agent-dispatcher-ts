@@ -92,12 +92,8 @@ export class LinearGraphQLClient {
   }
 
   /**
-   * Post a plain comment on an issue.
-   * Unlike createActivity, this has no session dependency — Linear's activity
-   * feed only exists inside an Agent Session's timeline (agentSessionId is a
-   * required, non-nullable argument on that mutation), so a comment is the
-   * only Linear-side feedback surface available for webhooks with no session
-   * (e.g. plain issue updates, not Agent Session interactions).
+   * Post a plain comment on an issue: the feedback channel for webhooks with no agent
+   * session (activities need an agentSessionId).
    */
   async createComment(issueId: string, body: string): Promise<{ id: string }> {
     if (!issueId || !body) {
@@ -120,14 +116,10 @@ export class LinearGraphQLClient {
   }
 
   /**
-   * Resolve issue labels and identifier, falling back to a Linear API fetch when the
-   * webhook-supplied labels look incomplete (fewer than MIN_LABEL_COUNT_FOR_FALLBACK).
-   * Webhooks are the primary source of truth (fast, already delivered); the API is only
-   * queried when the webhook payload missed updates. The identifier comes along for free
-   * on that same fetch — AgentSession webhooks never carry one, so this is the only place
-   * dispatcher-service can recover it without a second API round trip. Falls back to the
-   * webhook labels (and no identifier) if the API fetch itself fails, so a Linear API
-   * outage doesn't block routing.
+   * Resolve issue labels and identifier. Webhook labels are used as-is unless there are
+   * fewer than MIN_LABEL_COUNT_FOR_FALLBACK, in which case they are re-fetched from Linear
+   * (the identifier comes with that fetch; AgentSession webhooks never carry one). If the
+   * fetch fails, the webhook labels are used so an API outage doesn't block routing.
    */
   async resolveIssueContext(issueId: string, webhookLabels: string[]): Promise<IssueContext> {
     if (webhookLabels.length >= MIN_LABEL_COUNT_FOR_FALLBACK) {

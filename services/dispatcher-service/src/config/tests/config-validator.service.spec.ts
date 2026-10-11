@@ -1,17 +1,7 @@
 import { ConfigValidatorService } from '../config-validator.service';
-import type { DispatcherConfig } from '../config';
+import { makeDispatcherConfig } from '../../test-utils/dispatcher-config';
 
-function makeConfig(overrides: Partial<DispatcherConfig> = {}): DispatcherConfig {
-  return {
-    relay: { enabled: false },
-    server: { port: 3000, globalPrefix: '' },
-    executor: { claudeBinPath: 'claude', allowedEnvVars: [], timeout: 1_800_000 },
-    database: { path: './data/dispatcher.db', synchronize: true, logging: false },
-    linear: { apiKey: 'key_1' },
-    preflight: { skip: false },
-    ...overrides,
-  };
-}
+const makeConfig = makeDispatcherConfig;
 
 describe('ConfigValidatorService', () => {
   it('passes validation for a complete config', () => {

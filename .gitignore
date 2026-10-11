@@ -49,11 +49,6 @@ Thumbs.db
 coverage/
 *.lcov
 
-# Serverless/AWS
-.sst/
-.sst.json
-.sam/
-
 # Temporary files
 *.tmp
 *.temp
@@ -65,4 +60,5 @@ coverage/
 routing.config.json
 
 *.db
-.data/
+*.db-wal
+*.db-shm

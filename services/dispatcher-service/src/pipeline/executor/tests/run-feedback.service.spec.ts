@@ -6,6 +6,7 @@ import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import { StoreModule } from '../../../store/store.module';
 import { DispatcherConfigModule } from '../../../config/dispatcher-config.module';
 import type { DispatcherConfig } from '../../../config/config';
+import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 
 jest.mock('@linear-agent/linear-client');
 
@@ -13,16 +14,8 @@ const MockedLinearGraphQLClient = LinearGraphQLClient as jest.MockedClass<
   typeof LinearGraphQLClient
 >;
 
-function makeConfig(apiKey?: string): DispatcherConfig {
-  return {
-    relay: { enabled: false },
-    server: { port: 3000, globalPrefix: '' },
-    executor: { claudeBinPath: 'claude', allowedEnvVars: [], timeout: 1_800_000 },
-    database: { path: './data/dispatcher.db', synchronize: true, logging: false },
-    linear: { apiKey },
-    preflight: { skip: false },
-  };
-}
+const makeConfig = (apiKey?: string): DispatcherConfig =>
+  makeDispatcherConfig({ linear: { apiKey } });
 
 async function buildService(apiKey?: string): Promise<RunFeedbackService> {
   const module = await Test.createTestingModule({

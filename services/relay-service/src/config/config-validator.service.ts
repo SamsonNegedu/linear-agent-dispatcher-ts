@@ -41,11 +41,6 @@ export class ConfigValidatorService implements OnModuleInit {
       errors.push('RELAY_BASE_URL is not a valid URL');
     }
 
-    // DynamoDB config
-    if (!this.config.dynamodb.tableName) {
-      warnings.push('RELAY_TABLE_NAME not set (using default: RelayTable)');
-    }
-
     // Optional: organizationId for workspace isolation
     if (!this.config.linear.organizationId) {
       warnings.push(

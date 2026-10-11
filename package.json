@@ -1,7 +1,7 @@
 {
   "name": "linear-dispatcher-monorepo",
   "version": "0.1.0",
-  "description": "Linear webhook dispatcher: portable data layer (SQL/DynamoDB) + serverless relay + local NestJS dispatcher",
+  "description": "Linear webhook dispatcher: a local relay receives Linear webhooks and fans them out to local dispatchers that run Claude",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,12 +9,6 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "sst:dev": "sst dev",
-    "sst:dev:testing": "SST_MODE=testing sst dev",
-    "sst:build": "sst build",
-    "sst:deploy": "sst deploy --stage prod",
-    "sst:remove": "sst remove",
-    "sst:remove:prod": "sst remove --stage prod",
     "dev": "pnpm -r --parallel dev",
     "relay": "cd services/relay-service && pnpm dev",
     "dispatcher": "cd services/dispatcher-service && pnpm dev",
@@ -28,15 +22,11 @@
     "dev:up": "node scripts/dev-up.mjs"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.0",
     "@types/node": "^22.0.0",
     "@types/uuid": "^9.0.0",
-    "aws-cdk-lib": "2.224.0",
-    "constructs": "10.3.0",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2004",
-    "sst": "2.49.8",
     "typescript": "^5.7.0"
   }
 }

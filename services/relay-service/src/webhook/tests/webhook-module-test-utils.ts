@@ -1,8 +1,8 @@
 import { Test, TestingModuleBuilder } from '@nestjs/testing';
-import { DynamoDBModule } from '@dynamodb/client';
+import { RelayDatabaseModule } from '../../database/relay-database.module';
 import { WebhookModule } from '../webhook.module';
 import { ConfigModule } from '../../config/config.module';
-import { FakeDynamoDBModule } from '../../test-utils/fake-dynamodb.module';
+import { FakeRelayDatabaseModule } from '../../test-utils/fake-relay-database.module';
 import type { RelayServiceConfig } from '../../config/relay-config';
 
 export function makeRelayServiceConfig(
@@ -15,24 +15,24 @@ export function makeRelayServiceConfig(
       webhookSecret: 'whsec_1',
     },
     relay: { baseUrl: 'https://relay.example.com' },
-    dynamodb: { tableName: 'RelayTable' },
+    database: { path: ':memory:' },
     ...overrides,
   };
 }
 
 /**
  * WebhookModule pulls in SubscriberModule (controllers, OAuthService) and
- * DynamoDBModule alongside its own providers — every one of those gets
+ * RelayDatabaseModule alongside its own providers — every one of those gets
  * constructed on compile() regardless of which service a given test cares
- * about. This sets the baseline overrides so nothing tries a real AWS call
+ * about. This sets the baseline overrides so nothing opens a real database
  * or throws on a missing env-derived config value.
  */
 export function baseWebhookModuleTestBuilder(
   configOverrides: Partial<RelayServiceConfig> = {},
 ): TestingModuleBuilder {
   return Test.createTestingModule({ imports: [WebhookModule, ConfigModule] })
-    .overrideModule(DynamoDBModule)
-    .useModule(FakeDynamoDBModule)
+    .overrideModule(RelayDatabaseModule)
+    .useModule(FakeRelayDatabaseModule)
     .overrideProvider('RelayServiceConfig')
     .useValue(makeRelayServiceConfig(configOverrides));
 }

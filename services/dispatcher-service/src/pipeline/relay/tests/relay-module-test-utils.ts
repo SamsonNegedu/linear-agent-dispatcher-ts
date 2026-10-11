@@ -7,18 +7,11 @@ import { DispatcherConfigModule } from '../../../config/dispatcher-config.module
 import { RoutingConfigService } from '../../../config/routing-config.service';
 import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import type { DispatcherConfig } from '../../../config/config';
+import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 
-export function makeDispatcherConfig(overrides: Partial<DispatcherConfig> = {}): DispatcherConfig {
-  return {
-    relay: { enabled: false },
-    server: { port: 3000, globalPrefix: '' },
-    executor: { claudeBinPath: 'claude', allowedEnvVars: [], timeout: 1_800_000 },
-    database: { path: './data/dispatcher.db', synchronize: true, logging: false },
-    linear: {},
-    preflight: { skip: true },
-    ...overrides,
-  };
-}
+/** DispatcherConfig for RelayModule tests: no Linear key, preflight skipped. */
+export const makeRelayTestConfig = (overrides: Partial<DispatcherConfig> = {}): DispatcherConfig =>
+  makeDispatcherConfig({ linear: {}, preflight: { skip: true }, ...overrides });
 
 /**
  * RelayModule (dispatcher's pipeline/relay) eagerly wires in PreflightModule,
@@ -35,7 +28,7 @@ export function baseRelayModuleTestBuilder(
     .overrideModule(StoreModule)
     .useModule(FakeStoreModule)
     .overrideProvider('DispatcherConfig')
-    .useValue(makeDispatcherConfig(configOverrides))
+    .useValue(makeRelayTestConfig(configOverrides))
     .overrideProvider(RoutingConfigService)
     .useValue({ getAllRepositories: () => [] } as unknown as RoutingConfigService)
     .overrideProvider(getRepositoryToken(WebhookQueueEntity))

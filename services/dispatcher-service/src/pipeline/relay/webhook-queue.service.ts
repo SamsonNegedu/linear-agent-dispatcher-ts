@@ -5,6 +5,7 @@ import { WebhookQueueEntity } from '../../store/typeorm/webhook-queue.entity';
 import { DispatcherService } from '../dispatcher/dispatcher.service';
 import type { NormalizedEvent } from '@webhook-verify/core';
 import { randomUUID } from 'crypto';
+import { errorMessage } from '../../common/error-message';
 
 @Injectable()
 export class WebhookQueueService implements OnModuleInit {
@@ -80,13 +81,13 @@ export class WebhookQueueService implements OnModuleInit {
           );
         } catch (error) {
           // Failure: mark as failed (no retry, since dispatchWebhook already posted error feedback to Linear)
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const message = errorMessage(error);
           await this.queueRepository.update(row.id, {
             status: 'failed',
-            lastError: errorMessage,
+            lastError: message,
           });
           this.logger.error(
-            `webhook.process_failed issue=${payload.issueIdentifier} idempotencyKey=${row.idempotencyKey} row=${row.id} error="${errorMessage}"`,
+            `webhook.process_failed issue=${payload.issueIdentifier} idempotencyKey=${row.idempotencyKey} row=${row.id} error="${message}"`,
           );
           // Continue to the next queued row — this one is now 'failed', not
           // 'queued', so the next iteration's query won't re-select it. An

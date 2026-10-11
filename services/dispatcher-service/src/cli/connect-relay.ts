@@ -2,7 +2,8 @@
 import { spawn } from 'child_process';
 import { createServer } from 'http';
 import { updateEnvFile } from '@linear-agent/env-file';
-import { CliError, envFilePath, errorMessage, parseFlags, runCli } from './cli-utils';
+import { CliError, envFilePath, parseFlags, runCli } from './cli-utils';
+import { errorMessage } from '../common/error-message';
 
 const DEFAULT_CALLBACK_PORT = 3333;
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000;

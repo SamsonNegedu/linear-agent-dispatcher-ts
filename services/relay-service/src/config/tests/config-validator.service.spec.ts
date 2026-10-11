@@ -9,7 +9,7 @@ function makeConfig(overrides: Partial<RelayServiceConfig> = {}): RelayServiceCo
       webhookSecret: 'whsec_1',
     },
     relay: { baseUrl: 'https://relay.example.com' },
-    dynamodb: { tableName: 'RelayTable' },
+    database: { path: ':memory:' },
     ...overrides,
   };
 }

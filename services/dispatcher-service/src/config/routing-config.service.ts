@@ -11,6 +11,7 @@ import {
   routingConfigSchema,
 } from './routing-schema';
 import { labelForSkill } from './skill-discovery';
+import { errorMessage } from '../common/error-message';
 
 // auto = skill listed in `skills` (label agent-<name>); override = issueLabelToSkill
 export type MappingSource = 'auto' | 'override';
@@ -117,13 +118,6 @@ export class RoutingConfigService {
     return this.findRepo(repoLabelName)?.mappings.find((m) => m.issueLabel === modeLabel)?.skill;
   }
 
-  /** Repo label -> path (for compatibility). */
-  getRepoMapping(): Record<string, string> {
-    return Object.fromEntries(
-      this.config.repositories.map((r) => [repoLabel(r), expandHome(repoPathOf(r))]),
-    );
-  }
-
   private findRepo(label: string): ResolvedRepo | undefined {
     const entry = this.config.repositories.find((r) => repoLabel(r) === label);
     return entry ? this.resolveRepo(entry) : undefined;
@@ -168,9 +162,7 @@ export class RoutingConfigService {
     try {
       raw = JSON.parse(readFileSync(configPath, 'utf-8'));
     } catch (error) {
-      throw new Error(
-        `Invalid JSON in routing.config.json: ${error instanceof Error ? error.message : error}`,
-      );
+      throw new Error(`Invalid JSON in routing.config.json: ${errorMessage(error)}`);
     }
 
     const parsed = routingConfigSchema.safeParse(raw);

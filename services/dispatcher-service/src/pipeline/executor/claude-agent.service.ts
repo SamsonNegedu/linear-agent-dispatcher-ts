@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import type { DispatcherConfig } from '../../config/config';
 import { MAX_ERROR_MESSAGE_LENGTH } from './constants';
 import { McpServerDiscoveryService } from './mcp-server-discovery.service';
+import { errorMessage } from '../../common/error-message';
 
 interface ClaudeSpawnResult {
   status: 'succeeded' | 'failed' | 'needs_input';
@@ -20,12 +21,10 @@ const STOP_RULE_PATTERN = /^[\s*_`>#-]*Stop rule:/i;
 export const isStopRuleReply = (text: string | undefined): boolean =>
   !!text && STOP_RULE_PATTERN.test(text);
 
-// How long to wait after SIGTERM before escalating to SIGKILL, if the
-// process (or something it spawned) hasn't exited on its own.
+// How long after SIGTERM before escalating to SIGKILL.
 const SIGKILL_GRACE_MS = 10_000;
 
-// Field names match Claude CLI's --output-format json schema (snake_case), not
-// camelCase — verified against `claude -p ... --output-format json` output.
+// Field names are the Claude CLI's `--output-format json` schema (snake_case).
 interface ClaudeOutput {
   session_id?: string;
   result?: string;
@@ -74,11 +73,8 @@ export class ClaudeAgentService {
 
       const env = this.buildSafeEnv();
 
-      // Process-group kill (`-child.pid`) below is what actually needs to
-      // reach any subprocesses Claude spawns, so spawn()'s own `timeout`
-      // option is intentionally not used here — it only signals the direct
-      // child, and would just be a second, redundant timer racing the one
-      // below.
+      // No spawn() `timeout` option: it only signals the direct child. The timer below kills
+      // the whole process group, which also reaches subprocesses Claude spawns.
       const child = spawn(this.config.executor.claudeBinPath, args, {
         cwd: repoPath,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -130,11 +126,8 @@ export class ClaudeAgentService {
         }
 
         if (!errorSnippet && stderr) {
-          // Keep the *end* of the stream: this is raw process stderr, where
-          // the actual error/stack trace is typically the last thing
-          // written — unlike the curated messages posted to Linear (see
-          // RunFeedbackService), which lead with
-          // the salient point and are truncated from the start instead.
+          // Raw stderr: the actual error is usually last, so keep the end (curated messages
+          // posted to Linear lead with the point and keep the start instead).
           errorSnippet = stderr.slice(-MAX_ERROR_MESSAGE_LENGTH);
         }
 
@@ -181,17 +174,8 @@ export class ClaudeAgentService {
           );
           this.killProcessGroup(child.pid, 'SIGTERM');
 
-          // If the process (or something it spawned) ignores SIGTERM, escalate
-          // to SIGKILL after a grace period. Without this, a hung process
-          // could outlive its own "timeout" indefinitely — the run row would
-          // stay 'running' until StaleRunReconciliationService's next sweep,
-          // rather than actually being terminated. This timer only fires if
-          // 'close'/'error' haven't already cleared it, so reaching the
-          // callback body means the process is presumed still alive — there
-          // is no reliable synchronous "is it dead yet" check available here
-          // (child.killed only reflects whether child.kill() was called, not
-          // whether the process actually exited, and we're signaling the
-          // process group via process.kill() instead).
+          // Escalate to SIGKILL if SIGTERM was ignored; otherwise a hung process outlives its
+          // timeout. This timer is cleared on 'close'/'error', so firing means it is still alive.
           killEscalationHandle = setTimeout(() => {
             this.logger.error(
               `Claude run still alive ${SIGKILL_GRACE_MS}ms after SIGTERM, sending SIGKILL: /${skill} for ${issueIdentifier} pid=${child.pid}`,
@@ -204,20 +188,17 @@ export class ClaudeAgentService {
   }
 
   /**
-   * process.kill() throws synchronously if the target process group no
-   * longer exists — a real race here (the process can exit in the gap
-   * between the timeout firing and the signal being sent), and an uncaught
-   * throw inside a bare setTimeout callback would crash the whole
-   * dispatcher process, not just this run.
+   * process.kill() throws if the group already exited (a real race between the timeout and
+   * the signal), and an uncaught throw in a timer callback would crash the whole dispatcher.
    */
   private killProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
     if (!pid) return;
     try {
       process.kill(-pid, signal);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       this.logger.debug(
-        `killProcessGroup(${pid}, ${signal}) failed (likely already exited): ${errorMessage}`,
+        `killProcessGroup(${pid}, ${signal}) failed (likely already exited): ${message}`,
       );
     }
   }

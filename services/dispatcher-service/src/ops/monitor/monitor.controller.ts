@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Run } from '../../store/store.interfaces';
 import { MonitorService, type MonitorSummary } from './monitor.service';
+import { errorMessage } from '../../common/error-message';
 
 @Controller('monitor')
 export class MonitorController {
@@ -24,7 +25,7 @@ export class MonitorController {
     } catch (error) {
       this.logger.error('Summary request failed:', error);
       throw new HttpException(
-        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 'error', error: errorMessage(error) },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -55,7 +56,7 @@ export class MonitorController {
       if (error instanceof HttpException) throw error;
       this.logger.error('Runs request failed:', error);
       throw new HttpException(
-        { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 'error', error: errorMessage(error) },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

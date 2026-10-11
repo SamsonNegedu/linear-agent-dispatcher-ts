@@ -36,7 +36,6 @@ describe('SubscriberService', () => {
       upsertSubscriber: jest.fn(),
       markWebhookDelivered: jest.fn(),
       deleteStaleSubscribers: jest.fn(),
-      updateEndpointBySecret: jest.fn(),
       updateEndpointById: jest.fn(),
       generateSubscriberSecret: jest.fn(),
     } as unknown as jest.Mocked<SubscriberRegistry>;

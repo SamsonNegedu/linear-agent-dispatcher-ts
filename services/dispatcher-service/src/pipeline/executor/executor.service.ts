@@ -3,6 +3,7 @@ import type { IStoreRepository } from '../../store/store.interfaces';
 import type { NormalizedEvent } from '@webhook-verify/core';
 import { ClaudeAgentService } from './claude-agent.service';
 import { RunFeedbackService } from './run-feedback.service';
+import { errorMessage } from '../../common/error-message';
 
 @Injectable()
 export class ExecutorService {
@@ -70,7 +71,7 @@ export class ExecutorService {
         );
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const errorMsg = errorMessage(error);
       this.logger.error(`Run failed: ${runId} - ${errorMsg}`);
       await this.store.completeRun(runId, {
         status: 'failed',

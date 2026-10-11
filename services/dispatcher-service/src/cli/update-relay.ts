@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { existsSync } from 'fs';
 import { readEnvFile, updateEnvFile } from '@linear-agent/env-file';
-import { CliError, envFilePath, errorMessage, parseFlags, runCli } from './cli-utils';
+import { CliError, envFilePath, parseFlags, runCli } from './cli-utils';
+import { errorMessage } from '../common/error-message';
 
 const USAGE =
   'Usage: pnpm update-relay --local-endpoint=https://new.server.com [--relay-url=http://localhost:3001]';
@@ -32,9 +33,9 @@ runCli(async () => {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        subscriberId: env.RELAY_SUBSCRIBER_ID,
         subscriberSecret: env.RELAY_SUBSCRIBER_SECRET,
         localEndpoint: `${localEndpoint}/webhooks/relay`,
-        ...(env.RELAY_SUBSCRIBER_ID ? { subscriberId: env.RELAY_SUBSCRIBER_ID } : {}),
       }),
     });
   } catch (error) {

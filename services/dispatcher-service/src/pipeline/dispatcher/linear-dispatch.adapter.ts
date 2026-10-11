@@ -9,17 +9,11 @@ import { ValidationError, IncompleteLabelsError } from '@webhook-verify/core';
 import { RoutingConfigService } from '../../config/routing-config.service';
 import { RunFeedbackService } from '../executor/run-feedback.service';
 
-// Mode labels determine which Claude skill to invoke for an issue. Teams
-// define their own mode labels in routing.config.json (any naming
-// convention is allowed), e.g. agent-implement, ready-for-agent, skill-test.
-
 /**
- * Quarantines everything Linear-specific about deciding whether/how to
- * dispatch a run: Linear's action/state model (shouldDispatch), its
- * label-based routing convention (resolveRouting), and its two feedback
- * channels — agent session activity vs. issue comment (postFeedback).
- * Depends on dispatcher-service-local config and API clients, so it's
- * DI-wired here rather than living in the shared webhook-verify package.
+ * Everything Linear-specific about dispatching: whether a webhook triggers a run
+ * (shouldDispatch), which repo and skill it routes to (resolveRouting), and where user
+ * feedback goes (postFeedback). Lives here, not in webhook-verify, because it needs
+ * the dispatcher's routing config and feedback service.
  */
 @Injectable()
 export class LinearDispatchAdapter implements DispatchAdapter {
@@ -31,21 +25,10 @@ export class LinearDispatchAdapter implements DispatchAdapter {
   ) {}
 
   /**
-   * Explicit rules, in order:
-   * 1. Agent session events always dispatch. A human interacting with an
-   *    agent session in Linear's UI is itself the trigger.
-   * 2. Issue "create" events always dispatch. There is no prior state on a
-   *    create event — the issue's initial fields aren't a "change" to react to.
-   * 3. Issue "update" events dispatch if `changedFields` is non-empty, i.e. at
-   *    least one real field on the issue changed (labels, delegate, state,
-   *    assignee, anything). Linear fires an "Issue update" webhook for *any*
-   *    field change, including a side effect of posting a comment — which
-   *    bumps only `updatedAt` and touches no other field. Without this check,
-   *    our own progress/success comment would re-trigger a run indefinitely:
-   *    run -> comment -> webhook -> run -> ...
-   * 4. Terminal issues (Done/Canceled) never dispatch when policy.skipDoneIssues
-   *    is enabled, even if a trigger field changed in the same webhook.
-   * 5. Anything else (unrecognized action) does not dispatch.
+   * Agent sessions and issue creates always dispatch; an issue update dispatches only if a
+   * real field changed (a comment bumps only `updatedAt`, and would otherwise loop:
+   * run -> comment -> webhook -> run); terminal issues are skipped when
+   * policy.skipDoneIssues is set. Full rules: shouldTriggerDispatch in webhook-verify.
    */
   shouldDispatch(event: NormalizedEvent): DispatchDecision {
     if (event.kind === 'agent_session') {
@@ -78,10 +61,8 @@ export class LinearDispatchAdapter implements DispatchAdapter {
   }
 
   /**
-   * Validates issue labels for webhook dispatch. Requires exactly one domain
-   * label (repo routing) and one mode label (skill selection). Domain and
-   * mode labels are in separate namespaces to prevent collisions. Throws
-   * ValidationError for expected failures (posted as feedback via postFeedback).
+   * Requires exactly one repo label and one mode label (`agent-<skill>`) among the issue's
+   * labels. Throws ValidationError for fixable mistakes (posted back via postFeedback).
    */
   resolveRouting(event: NormalizedEvent): RoutingDecision {
     const labels = event.routingTags;
@@ -94,10 +75,7 @@ export class LinearDispatchAdapter implements DispatchAdapter {
       allIncomplete &&= !!domainValidation.incomplete;
     }
 
-    // Validate mode label (needs repo context to know which modes are valid). Skipped
-    // entirely when the domain label itself isn't resolved yet — with no repo to check
-    // modes against, a synthetic placeholder error would only be noise on top of the
-    // domain problem already reported above.
+    // Mode labels are per repo, so they're only checked once the repo label resolved.
     const repoLabel = domainValidation.repoLabel;
     const modeValidation = repoLabel ? this.validateModeLabels(labels, repoLabel) : {};
 
@@ -109,10 +87,8 @@ export class LinearDispatchAdapter implements DispatchAdapter {
     if (problems.length > 0) {
       const listItems = problems.map((p) => `- ${p}`).join('\n');
 
-      // Missing domain/mode labels (not yet set) are a routine, frequent state for
-      // issues still being triaged — not a misconfiguration — so handle silently
-      // instead of posting feedback on every relabel/update. Conflicts (multiple
-      // domain or mode labels) are genuine mistakes and always get feedback.
+      // Missing labels are routine for issues still being triaged: stay silent. Conflicting
+      // labels are mistakes and always get feedback.
       if (allIncomplete) {
         throw new IncompleteLabelsError(listItems);
       }
@@ -132,11 +108,7 @@ export class LinearDispatchAdapter implements DispatchAdapter {
     };
   }
 
-  /**
-   * Routes error notification based on webhook type:
-   * - Agent sessions: post activity (rich, structured feedback in session timeline)
-   * - Issue webhooks: post comment (plain feedback on issue thread)
-   */
+  /** Tells the user what to fix: in the agent session when there is one, else on the issue. */
   async postFeedback(event: NormalizedEvent, message: string): Promise<void> {
     await this.feedback.needsInput({ issueId: event.issueId, sessionId: event.sessionId }, message);
   }

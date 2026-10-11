@@ -2,9 +2,9 @@
 
 ## 1. Prerequisites
 
-- Node.js 24+, pnpm 9+, Docker, [bun](https://bun.sh) (for the monitor TUI)
+- Node.js 24+, pnpm 9+, [bun](https://bun.sh) (for the monitor TUI)
 - `claude` CLI on your `$PATH` and logged in
-- Optional: [Tailscale](https://tailscale.com/download) for a stable public URL (see below)
+- A way to expose the relay: [Tailscale](https://tailscale.com/download) (recommended, stable URL) or `cloudflared` (random URL each run)
 - A Linear OAuth app (client ID, client secret, webhook secret)
 
 ## 2. Run
@@ -16,8 +16,8 @@ pnpm dev:up        # from the repo root
 
 `pnpm dev:up` does everything:
 
-1. Starts DynamoDB Local (Docker) and a public tunnel (Tailscale Funnel, Cloudflare, or a quick tunnel), and creates the table
-2. Starts the relay with the tunnel as its public URL
+1. Starts a public tunnel (Tailscale Funnel, or Cloudflare)
+2. Starts the relay (SQLite, `services/relay-service/data/relay.db`) with the tunnel as its public URL
 3. Asks once for your Linear credentials (saved to `services/relay-service/.env.local`)
 4. Opens your browser to authorize Linear (first run only; saves `RELAY_SUBSCRIBER_SECRET`)
 5. Starts the dispatcher and opens the monitor TUI. Quit the TUI or press Ctrl-C to stop everything
@@ -30,9 +30,9 @@ It prints the webhook and OAuth callback URLs to paste into your Linear app. Log
 
 Without a stable URL you must update Linear every run. Easiest fix, free and no domain needed: install [Tailscale](https://tailscale.com/download), run `tailscale up` once, and enable Funnel for your tailnet. `pnpm dev:up` then uses `https://<machine>.<tailnet>.ts.net` automatically.
 
-Alternative: a Cloudflare named tunnel (needs a domain). Route a hostname to `http://host.docker.internal:<relay-port>` and set `CLOUDFLARE_TUNNEL_TOKEN` and `TUNNEL_HOSTNAME` in the root `.env`. This takes priority over Tailscale.
+Alternative: a Cloudflare named tunnel (needs a domain). Route a hostname to `http://localhost:<relay-port>` and set `CLOUDFLARE_TUNNEL_TOKEN` and `TUNNEL_HOSTNAME` in the root `.env`. This takes priority over Tailscale.
 
-With neither, it falls back to a random quick-tunnel URL.
+With neither, it falls back to a random quick-tunnel URL if `cloudflared` is installed, and stops with instructions if not.
 
 ## 3. Add repos and choose skills
 
@@ -101,7 +101,7 @@ A run is one non-interactive turn, so an agent can't ask a question and wait. A 
 - **Ctrl+R says the server wasn't started by `pnpm monitor`**: the TUI was started on its own; restart the server manually.
 - **Nothing on issue assignment**: check the Linear webhook and callback URLs match the printed tunnel URL.
 - **"Subscriber not found on relay"**: the relay has no record of your saved secret (e.g. wiped DB). Re-run with `pnpm dev:up -- --reconnect`. It also reconnects automatically when the saved relay URL differs from the current tunnel.
-- **Reset local state**: delete `.data/dynamodb` (relay data) and `RELAY_SUBSCRIBER_SECRET`. The relay's registration persists between runs, so a changed tunnel URL needs a re-authorize.
+- **Reset local state**: stop everything, delete `services/relay-service/data/relay.db`, then run `pnpm dev:up -- --reconnect` (every dispatcher registration lives in that file).
 
 ## Manual / team setups
 
@@ -113,4 +113,4 @@ pnpm connect-relay --relay-url=<relay> --local-endpoint=<public dispatcher url>
 pnpm update-relay --local-endpoint=https://new-server.com/webhooks/relay   # changed endpoint, no re-auth
 ```
 
-A shared relay on AWS can't reach `localhost`; expose the dispatcher with a tunnel and pass that URL as `--local-endpoint`.
+A relay on another machine can't reach `localhost`; expose the dispatcher with a tunnel and pass that URL as `--local-endpoint`.

@@ -6,6 +6,7 @@ import { PreflightModule } from '../preflight.module';
 import { DispatcherConfigModule } from '../../../config/dispatcher-config.module';
 import { RoutingConfigService } from '../../../config/routing-config.service';
 import type { DispatcherConfig } from '../../../config/config';
+import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 
 jest.mock('child_process');
 jest.mock('fs');
@@ -13,17 +14,7 @@ jest.mock('fs');
 const mockExecFile = execFile as unknown as jest.Mock;
 const mockExistsSync = existsSync as jest.Mock;
 
-function makeConfig(overrides: Partial<DispatcherConfig> = {}): DispatcherConfig {
-  return {
-    relay: { enabled: false },
-    server: { port: 3000, globalPrefix: '' },
-    executor: { claudeBinPath: 'claude', allowedEnvVars: [], timeout: 1_800_000 },
-    database: { path: './data/dispatcher.db', synchronize: true, logging: false },
-    linear: { apiKey: 'key_1' },
-    preflight: { skip: false },
-    ...overrides,
-  };
-}
+const makeConfig = makeDispatcherConfig;
 
 function makeRoutingConfig(
   repos: Array<{ label: string; path: string; issueLabelToSkill?: Record<string, string> }> = [],

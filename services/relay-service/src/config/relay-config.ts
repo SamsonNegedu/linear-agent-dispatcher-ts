@@ -9,9 +9,8 @@ export interface RelayServiceConfig {
   relay: {
     baseUrl: string;
   };
-  dynamodb: {
-    tableName: string;
-    region?: string;
+  database: {
+    path: string;
   };
 }
 
@@ -54,9 +53,8 @@ export const loadRelayConfig = (): RelayServiceConfig => {
     relay: {
       baseUrl,
     },
-    dynamodb: {
-      tableName: process.env.RELAY_TABLE_NAME || 'RelayTable',
-      region: process.env.AWS_REGION,
+    database: {
+      path: process.env.RELAY_DB_PATH || './data/relay.db',
     },
   };
 };

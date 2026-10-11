@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DynamoDBModule } from '@dynamodb/client';
+import { RelayDatabaseModule } from '../database/relay-database.module';
 import { SubscriberController } from './subscriber.controller';
 import { OAuthCallbackController } from './oauth-callback.controller';
 import { SubscriberService } from './subscriber.service';
@@ -10,7 +10,7 @@ import {
 } from './subscriber-registry.provider';
 
 @Module({
-  imports: [DynamoDBModule],
+  imports: [RelayDatabaseModule],
   controllers: [SubscriberController, OAuthCallbackController],
   providers: [subscriberRegistryProvider, SubscriberService, OAuthService],
   exports: [SubscriberService, SUBSCRIBER_REGISTRY_REPOSITORY],

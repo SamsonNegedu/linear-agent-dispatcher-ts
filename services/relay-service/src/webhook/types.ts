@@ -17,5 +17,4 @@ export interface WebhookDeliveryRecord {
   responseTime?: number;
   errorMessage?: string;
   linearAssigneeId?: string;
-  ttl?: number;
 }

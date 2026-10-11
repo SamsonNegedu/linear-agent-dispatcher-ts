@@ -7,7 +7,7 @@ and the local dispatcher it fans webhooks out to.
 
 Read these to understand _why the system looks the way it does_.
 
-- **[ADR 0001: Relay Service Architecture](0001-relay-service-architecture.md)** — Why a dedicated, serverless relay exists at all: OAuth gateway, subscriber registry, Lambda + DynamoDB + NestJS/Fastify.
+- **[ADR 0001: Relay Service Architecture](0001-relay-service-architecture.md)** — Why a dedicated relay exists at all (OAuth gateway, subscriber registry), how it runs locally on NestJS/Fastify + SQLite, and why the original AWS design was removed.
 - **[ADR 0002: OAuth and Subscriber Registration](0002-oauth-and-subscriber-registration.md)** — How a dispatcher connects: two-stage OAuth flow, HMAC signing.
 - **[ADR 0003: Webhook Routing and Delivery](0003-webhook-routing-and-delivery.md)** — Relay → dispatcher delivery mechanics: synchronous, fire-and-forget, no retry.
 - **[ADR 0004: Webhook Dispatch — Trigger Semantics and Repository Routing](0004-dispatch-trigger-and-repo-routing.md)** — Whether a webhook should trigger a dispatch at all (the rule that stops the dispatcher's own comments from re-triggering itself), and if so, which repo + skill it routes to, the `routing.config.json` format (repos + exposed skills) and policy block, and startup preflight checks.
@@ -36,7 +36,7 @@ When adding a new feature or changing an existing decision:
 
 1. Check if an existing ADR covers it. If yes, update it — don't create a
    near-duplicate for a decision that's really a detail of one already
-   recorded (e.g. "why DynamoDB" isn't independent of "why serverless").
+   recorded (e.g. "why SQLite" isn't independent of "why a local relay").
 2. If it's genuinely a new, independently-reversible decision, create a new
    ADR (Status, Context, Decision, Consequences, Alternatives — no "Testing"
    section; that belongs in the test files themselves, not here).

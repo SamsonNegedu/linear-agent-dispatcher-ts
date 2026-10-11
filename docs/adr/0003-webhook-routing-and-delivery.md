@@ -37,12 +37,12 @@ Implement synchronous delivery with fallback logging:
 
 - **Idempotent**: webhook delivery ID allows dispatchers to deduplicate retries
 - **Fire-and-forget**: relay doesn't retry; if dispatcher fails, it logs and moves on
-- **Async fallback**: failed deliveries logged to DynamoDB (inspect them in the DynamoDB console)
+- **Async fallback**: failed deliveries are logged to the relay's SQLite database (inspect with `sqlite3 data/relay.db`)
 - **No queuing**: webhooks aren't queued; if delivery fails, dispatcher must re-fetch from Linear
 
 ### Logging
 
-All deliveries (success and failure) logged to `WebhookDeliveries` table:
+All deliveries (success and failure) are logged to the `webhook_deliveries` table:
 
 - deliveryId (hash of webhook ID + dispatcher ID)
 - status (success, timeout, http_error)
@@ -55,8 +55,8 @@ All deliveries (success and failure) logged to `WebhookDeliveries` table:
 
 - **Low latency**: synchronous delivery means webhook reaches dispatcher immediately
 - **Simplicity**: no message queue, DLQ, or retry service needed
-- **Observability**: full delivery history in DynamoDB for audit
-- **Cost**: no extra queue charges; pay only for Lambda invocations
+- **Observability**: full delivery history in SQLite for audit
+- **Cost**: no extra queue infrastructure
 
 ### Negative
 
@@ -82,7 +82,7 @@ All deliveries (success and failure) logged to `WebhookDeliveries` table:
 
 ### Option C: Fan-out via SNS
 
-- **Pros**: Multiple subscribers possible, AWS-native
+- **Pros**: Multiple subscribers possible
 - **Cons**: Less control over signature verification per dispatcher
 
 ## Implementation Notes
@@ -93,6 +93,6 @@ All deliveries (success and failure) logged to `WebhookDeliveries` table:
   a real limit if a single team ever had dozens of active dispatchers
 - Delivery signature header: `X-Dispatcher-Signature: sha256={hex_hmac}`
 - Error codes: 2xx = success, 4xx = permanent failure (don't retry), 5xx = temporary (Linear will retry)
-- Delivery log retention: 30 days (TTL); cleared automatically (real — see [ADR 0001](0001-relay-service-architecture.md))
-- No relay dashboard exists — failed deliveries are only visible by querying
-  the `WebhookDeliveries` table directly (e.g. via the AWS console or CLI)
+- Delivery log retention: 30 days; the relay's daily housekeeping deletes older rows (see [ADR 0001](0001-relay-service-architecture.md))
+- No relay dashboard or read API exists — failed deliveries are only visible by querying
+  the `webhook_deliveries` table directly (`sqlite3 data/relay.db`)

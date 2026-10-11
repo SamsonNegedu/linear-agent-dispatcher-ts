@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { DispatcherConfig } from '../../config/config';
 import { ActivityType, LinearGraphQLClient } from '@linear-agent/linear-client';
 import { MAX_ERROR_MESSAGE_LENGTH } from './constants';
+import { errorMessage } from '../../common/error-message';
 
 /** Where feedback goes: the agent session when there is one, otherwise a comment on the issue. */
 export interface FeedbackTarget {
@@ -85,8 +86,7 @@ export class RunFeedbackService {
         : await this.linear.createComment(target.issueId!, body);
       this.logger.log(`${tag} Posted ${target.sessionId ? 'activity' : 'comment'}: ${result.id}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`${tag} Failed to post: ${message}`);
+      this.logger.error(`${tag} Failed to post: ${errorMessage(error)}`);
     }
   }
 }

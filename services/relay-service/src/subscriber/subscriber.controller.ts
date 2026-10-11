@@ -1,29 +1,26 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Patch,
-  Param,
-  Query,
   Body,
+  Controller,
+  Get,
   HttpException,
   HttpStatus,
   Logger,
+  Param,
+  Patch,
+  Query,
 } from '@nestjs/common';
-import { SubscriberService, buildSubscriberId } from './subscriber.service';
+import { safeEqual } from '@webhook-verify/core';
+import { SubscriberService } from './subscriber.service';
 import { OAuthService } from './oauth.service';
+import { isLocalhostUrl, isValidRelayUrl, isValidWebhookEndpoint } from './endpoint-validation';
 
-interface RegisterRequest {
-  linearUserId: string;
-  teamKey: string;
-  /** Full URL the relay will POST webhook deliveries to verbatim — not just a base
-   *  origin. The relay has no knowledge of the receiver's route structure, so the
-   *  caller (e.g. dispatcher-service's connect-relay CLI) must include whatever
-   *  path its webhook handler actually listens on (e.g. `.../webhooks/relay`). */
-  localEndpoint: string;
-  domains?: string[];
-  subscriberSecret: string;
+const badRequest = (message: string): HttpException =>
+  new HttpException(message, HttpStatus.BAD_REQUEST);
+
+interface UpdateRequest {
   subscriberId?: string;
+  subscriberSecret?: string;
+  localEndpoint?: string;
 }
 
 @Controller('subscribers')
@@ -36,15 +33,13 @@ export class SubscriberController {
   ) {}
 
   /**
-   * GET /auth/start?localEndpoint=...&cliCallback=...&relayUrl=...
-   * Start OAuth flow: redirect to Linear
-   * `localEndpoint` must be the full webhook delivery URL (see RegisterRequest
-   * above), not just a base origin.
-   * `cliCallback`, when provided, must point at a local CLI listener
-   * (http://localhost:<port>/...) that the /callback handler will redirect to
-   * once the flow completes, so the CLI never has to be given anything by hand.
-   * `relayUrl`, when provided, is used as the base URL for OAuth redirects;
-   * otherwise falls back to RELAY_BASE_URL env var.
+   * GET /subscribers/auth/start?localEndpoint=...&cliCallback=...&relayUrl=...
+   * Starts the OAuth flow and returns the Linear authorization URL.
+   * - `localEndpoint`: the full URL the relay will POST webhooks to (not just an origin; the
+   *   relay doesn't know the receiver's routes, e.g. `.../webhooks/relay`).
+   * - `cliCallback`: a local CLI listener (http://localhost:<port>/...) the /callback handler
+   *   redirects to once the flow completes, so the CLI never has to be given anything by hand.
+   * - `relayUrl`: base URL for OAuth redirects; defaults to RELAY_BASE_URL.
    */
   @Get('auth/start')
   startAuth(
@@ -52,70 +47,31 @@ export class SubscriberController {
     @Query('cliCallback') cliCallback?: string,
     @Query('relayUrl') relayUrl?: string,
   ) {
-    if (!localEndpoint) {
-      throw new HttpException('Missing localEndpoint query parameter', HttpStatus.BAD_REQUEST);
+    if (!localEndpoint) throw badRequest('Missing localEndpoint query parameter');
+    if (!isValidWebhookEndpoint(localEndpoint)) {
+      throw badRequest('Invalid localEndpoint URL: must be HTTPS to a public host');
+    }
+    if (cliCallback && !isLocalhostUrl(cliCallback)) {
+      throw badRequest('Invalid cliCallback URL: must be http://localhost');
+    }
+    if (relayUrl && !isValidRelayUrl(relayUrl)) {
+      throw badRequest('Invalid relayUrl: must be HTTPS or http://localhost');
     }
 
-    // Validate URL is HTTPS and not a private/local IP
-    if (!this.isValidWebhookEndpoint(localEndpoint)) {
-      throw new HttpException('Invalid localEndpoint URL: must be HTTPS', HttpStatus.BAD_REQUEST);
-    }
-
-    if (cliCallback && !this.isLocalhostUrl(cliCallback)) {
-      throw new HttpException(
-        'Invalid cliCallback URL: must be http://localhost',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (relayUrl && !this.isValidRelayUrl(relayUrl)) {
-      throw new HttpException(
-        'Invalid relayUrl: must be HTTPS or http://localhost',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const authUrl = this.oauthService.generateAuthorizationUrl(
-      localEndpoint,
-      cliCallback,
-      relayUrl,
-    );
-    return { redirect: authUrl };
-  }
-
-  private isLocalhostUrl(urlString: string): boolean {
-    try {
-      const url = new URL(urlString);
-      return url.protocol === 'http:' && url.hostname === 'localhost';
-    } catch {
-      return false;
-    }
-  }
-
-  private isValidRelayUrl(urlString: string): boolean {
-    try {
-      const url = new URL(urlString);
-      return (
-        url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost')
-      );
-    } catch {
-      return false;
-    }
+    return {
+      redirect: this.oauthService.generateAuthorizationUrl(localEndpoint, cliCallback, relayUrl),
+    };
   }
 
   /**
    * GET /subscribers/:id
-   * Lightweight existence check used by dispatcher-service to verify a
-   * subscriber it holds credentials for is still registered in the relay
-   * (e.g. hasn't been reaped by deleteStaleSubscribers). Deliberately omits
-   * subscriberSecret and localEndpoint from the response.
+   * Existence check the dispatcher uses to confirm the subscriber it holds credentials for is
+   * still registered (e.g. not reaped as inactive). Omits the secret and endpoint.
    */
   @Get(':id')
   async getById(@Param('id') id: string) {
     const subscriber = await this.subscriberService.getSubscriber(id);
-    if (!subscriber) {
-      throw new HttpException('Subscriber not found', HttpStatus.NOT_FOUND);
-    }
+    if (!subscriber) throw new HttpException('Subscriber not found', HttpStatus.NOT_FOUND);
 
     return {
       subscriberId: subscriber.subscriberId,
@@ -127,156 +83,39 @@ export class SubscriberController {
   }
 
   /**
-   * POST /subscribers/register
-   * Register a new subscriber or update existing
-   * Body: { linearUserId, teamKey, localEndpoint, domains, subscriberSecret, subscriberId? }
-   */
-  @Post('register')
-  async register(@Body() dto: RegisterRequest) {
-    const { linearUserId, teamKey, localEndpoint, domains = [], subscriberSecret } = dto;
-
-    // Validate required fields
-    if (!linearUserId || !teamKey || !localEndpoint || !subscriberSecret) {
-      throw new HttpException(
-        'Missing required fields: linearUserId, teamKey, localEndpoint, subscriberSecret',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Validate URL is HTTPS and not a private/local IP
-    if (!this.isValidWebhookEndpoint(localEndpoint)) {
-      throw new HttpException('Invalid localEndpoint URL: must be HTTPS', HttpStatus.BAD_REQUEST);
-    }
-
-    try {
-      const subscriberId = dto.subscriberId || buildSubscriberId(teamKey, linearUserId);
-
-      await this.subscriberService.registerSubscriber(
-        subscriberId,
-        teamKey,
-        linearUserId,
-        localEndpoint,
-        subscriberSecret,
-        domains,
-      );
-
-      this.logger.log(`Subscriber ${subscriberId} registered for team ${teamKey}`);
-
-      return {
-        registered: true,
-        subscriberId,
-        teamKey,
-        message: 'Subscription registered. Store RELAY_SUBSCRIBER_SECRET in your .env',
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error registering subscriber: ${errorMsg}`);
-      throw new HttpException('Failed to register subscriber', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  /**
    * PATCH /subscribers
-   * Update an existing subscription's webhook endpoint
-   * Authenticated by subscriberSecret (proof of ownership) OR subscriberId (direct ID lookup)
-   * Body: { subscriberSecret?, subscriberId?, localEndpoint }
+   * Moves an existing subscription to a new delivery endpoint. The caller must prove ownership
+   * with the subscriber's secret: subscriber ids are guessable (`<team>:<linearUserId>`), so
+   * without it anyone could redirect another person's webhooks.
    */
   @Patch()
-  async update(
-    @Body('subscriberSecret') subscriberSecret?: string,
-    @Body('subscriberId') subscriberId?: string,
-    @Body('localEndpoint') localEndpoint?: string,
-  ) {
-    if (!localEndpoint || (!subscriberSecret && !subscriberId)) {
-      throw new HttpException(
-        'Missing required fields: localEndpoint and either subscriberSecret or subscriberId',
-        HttpStatus.BAD_REQUEST,
-      );
+  async update(@Body() body: UpdateRequest) {
+    const { subscriberId, subscriberSecret, localEndpoint } = body ?? {};
+    if (!subscriberId || !subscriberSecret || !localEndpoint) {
+      throw badRequest('Missing required fields: subscriberId, subscriberSecret, localEndpoint');
+    }
+    if (!isValidWebhookEndpoint(localEndpoint)) {
+      throw badRequest('Invalid localEndpoint URL: must be HTTPS to a public host');
     }
 
-    // Validate URL is HTTPS and not a private/local IP
-    if (!this.isValidWebhookEndpoint(localEndpoint)) {
-      throw new HttpException('Invalid localEndpoint URL: must be HTTPS', HttpStatus.BAD_REQUEST);
+    const subscriber = await this.subscriberService.getSubscriber(subscriberId);
+    // One answer for an unknown id and a wrong secret, so ids cannot be probed.
+    if (!subscriber || !safeEqual(subscriberSecret, subscriber.subscriberSecret)) {
+      throw new HttpException('Invalid subscriber credentials', HttpStatus.UNAUTHORIZED);
     }
 
-    try {
-      let updated: { subscriberId: string; localEndpoint: string } | null;
+    const updated = await this.subscriberService.updateSubscriberEndpointById(
+      subscriberId,
+      localEndpoint,
+    );
+    if (!updated) throw new HttpException('Subscriber not found', HttpStatus.NOT_FOUND);
 
-      // Prefer ID lookup (no scan needed) over secret lookup
-      if (subscriberId) {
-        updated = await this.subscriberService.updateSubscriberEndpointById(
-          subscriberId,
-          localEndpoint,
-        );
-      } else {
-        updated = await this.subscriberService.updateSubscriberEndpoint(
-          subscriberSecret!,
-          localEndpoint,
-        );
-      }
-
-      if (!updated) {
-        const reason = subscriberId
-          ? 'Subscriber not found with that ID'
-          : 'subscriberId is required. Run pnpm connect-relay to save RELAY_SUBSCRIBER_ID to .env.local, then use pnpm update-relay again.';
-        throw new HttpException(reason, HttpStatus.BAD_REQUEST);
-      }
-
-      const logMsg = subscriberId
-        ? `Subscriber ${subscriberId} endpoint updated`
-        : `Subscriber endpoint updated for secret ending in ${subscriberSecret!.slice(-8)}`;
-      this.logger.log(logMsg);
-
-      return {
-        updated: true,
-        subscriberId: updated.subscriberId,
-        localEndpoint: updated.localEndpoint,
-        message: 'Subscription endpoint updated successfully',
-      };
-    } catch (error) {
-      if (error instanceof HttpException) throw error;
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error updating subscriber: ${errorMsg}`);
-      throw new HttpException('Failed to update subscription', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  private isValidWebhookEndpoint(urlString: string): boolean {
-    try {
-      const url = new URL(urlString);
-
-      // Only allow HTTPS, or HTTP on localhost for development
-      if (
-        url.protocol !== 'https:' &&
-        !(url.protocol === 'http:' && url.hostname === 'localhost')
-      ) {
-        return false;
-      }
-
-      // Reject private IP ranges (except localhost which is already covered)
-      const privateRanges = [
-        '127.0.0.1',
-        '10.',
-        '172.16.',
-        '192.168.',
-        '169.254.',
-        '::1',
-        'fc00::',
-      ];
-      if (
-        privateRanges.some(
-          (range) => url.hostname.startsWith(range) || url.hostname === 'localhost',
-        )
-      ) {
-        // localhost is allowed, but other private ranges are not
-        if (url.hostname !== 'localhost') {
-          return false;
-        }
-      }
-
-      return true;
-    } catch {
-      return false;
-    }
+    this.logger.log(`Subscriber ${subscriberId} endpoint updated`);
+    return {
+      updated: true,
+      subscriberId: updated.subscriberId,
+      localEndpoint: updated.localEndpoint,
+      message: 'Subscription endpoint updated successfully',
+    };
   }
 }

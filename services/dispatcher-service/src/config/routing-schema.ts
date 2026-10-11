@@ -63,7 +63,6 @@ export const routingConfigSchema = z
 
 export type RoutingConfigFile = z.infer<typeof routingConfigSchema>;
 export type RepositoryEntry = z.infer<typeof repository>;
-export type RepositoryObject = z.infer<typeof repositoryObject>;
 
 export function repoPathOf(repo: RepositoryEntry): string {
   return typeof repo === 'string' ? repo : repo.path;

@@ -1,17 +1,9 @@
 import { StaleRunReconciliationService } from '../stale-run-reconciliation.service';
 import type { IStoreRepository } from '../store.interfaces';
 import type { DispatcherConfig } from '../../config/config';
+import { makeDispatcherConfig } from '../../test-utils/dispatcher-config';
 
-function makeConfig(): DispatcherConfig {
-  return {
-    relay: { enabled: false },
-    server: { port: 3000, globalPrefix: '' },
-    executor: { claudeBinPath: 'claude', allowedEnvVars: [], timeout: 1_800_000 },
-    database: { path: './data/dispatcher.db', synchronize: true, logging: false },
-    linear: {},
-    preflight: { skip: false },
-  };
-}
+const makeConfig = (): DispatcherConfig => makeDispatcherConfig({ linear: {} });
 
 describe('StaleRunReconciliationService', () => {
   let store: jest.Mocked<IStoreRepository>;

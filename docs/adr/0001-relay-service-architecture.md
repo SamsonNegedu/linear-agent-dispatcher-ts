@@ -2,114 +2,59 @@
 
 **Status:** Accepted
 
+**Amended:** 2026-10-12 — the relay was originally designed to run on AWS (Lambda, API Gateway, DynamoDB, deployed with SST). It now runs locally as a plain NestJS server on SQLite, and the AWS path was removed; see "History" below.
+
 ## Context
 
-The Linear dispatcher needs to handle webhooks from Linear and route them to
-local dispatcher instances (one per team/workspace). A direct connection
-from each dispatcher to Linear would create:
+The Linear dispatcher needs to receive webhooks from Linear and route them to local dispatcher instances. A direct connection from each dispatcher to Linear would mean:
 
-- A separate OAuth app/flow per team
-- N × M networking complexity (N local dispatchers to M Linear teams)
-- Distributed, hard-to-rotate credentials
+- A separate OAuth app and flow per dispatcher
+- Credentials spread across machines, hard to rotate
 - No central place to see webhook delivery state
-
-This ADR covers the relay's shape as a whole: why it's a separate service,
-why it's serverless, and what it's built with. These were never independent
-choices — "a relay" implies "something that runs continuously with minimal
-ops," which is what pulled in serverless Lambda, which is what pulled in a
-Lambda-friendly datastore and framework. Splitting them into separate
-records would suggest they were each weighed independently; they weren't.
 
 ## Decision
 
 ### A dedicated relay service
 
-1. Acts as a single OAuth gateway to Linear (one app integration, not per-team)
-2. Receives all Linear webhooks at a single endpoint
-3. Maintains a subscriber registry mapping team → local dispatcher endpoint
-4. Routes webhooks to the appropriate local dispatcher(s)
+1. A single OAuth gateway to Linear (one app integration, not one per dispatcher)
+2. Receives all Linear webhooks at one endpoint
+3. Keeps a subscriber registry mapping team and user to a dispatcher's delivery URL
+4. Fans each webhook out to the matching dispatchers, signed per subscriber
 
-### Deployed serverless: AWS Lambda + API Gateway
+### Runs locally: NestJS on Fastify, SQLite for state
 
-- No server to run continuously for what is, at this system's actual scale
-  (a single team, a handful of dispatcher subscriptions), bursty and
-  infrequent traffic
-- Scales to zero when idle; cost is negligible at current volume
-- Each Lambda: Node.js 22+, 5-minute timeout, connects to DynamoDB for state
-
-### State store: DynamoDB, not RDS
-
-- Serverless fits the same reasoning as above — RDS bills for an always-on
-  instance regardless of traffic, to store what amounts to a few KB of
-  subscriber state and some delivery logs
-- Native TTL support: used for `WebhookDeliveries` (30-day auto-expiry, real
-  and implemented). _Not_ used for `SubscriberRegistry` — no `expiresAt`
-  field exists; the duplicate-subscriber problem this might have papered
-  over was instead fixed at the identity layer, see
-  [ADR 0005](0005-deterministic-subscriber-identity.md)
-
-### Framework: NestJS on Fastify
-
-- NestJS over raw handlers or a minimal Express app: structure (modules,
-  controllers, services) and built-in DI meaningfully help once you have
-  more than one or two endpoints (webhook ingestion, subscriber
-  registration, OAuth start/callback)
-- Originally deployed on `@nestjs/platform-express` +
-  `@codegenie/serverless-express`; migrated to `@nestjs/platform-fastify` +
-  `@fastify/aws-lambda`. No functional gap forced the move — one explicit
-  status-code fix was needed (Fastify's `reply.redirect(url)` reuses
-  whatever status Nest's router already set instead of defaulting to 302 the
-  way Express always does), everything else was a type-only swap. Took it
-  for the throughput/cold-start win on what is mostly small JSON payloads.
+- `pnpm dev:up` starts the relay on the developer's machine behind a public tunnel (Tailscale Funnel or Cloudflare), so there is nothing to deploy and no cloud account is needed.
+- State is one SQLite file (`better-sqlite3`): a `subscribers` table and a `webhook_deliveries` log. Housekeeping runs at startup and daily: subscribers inactive for 14 days and delivery logs older than 30 days are deleted. The duplicate-subscriber problem is solved at the identity layer, see [ADR 0005](0005-deterministic-subscriber-identity.md).
+- NestJS gives the handful of endpoints (webhook ingestion, OAuth start/callback, subscriber lookup and update) structure and dependency injection; Fastify keeps request handling light.
 
 ## Consequences
 
 ### Positive
 
 - **Single source of truth** for Linear OAuth credentials and webhook state
-- **Simplified security**: only one integration to manage with Linear
-- **No ops burden**: AWS manages scaling/patching; nothing to provision
-- **Cost**: negligible at current traffic — see Context; not worth a
-  detailed cost projection until traffic is orders of magnitude higher
-- **Structure**: NestJS's DI/module structure keeps the handful of relay
-  endpoints organized as more get added
+- **One integration** to manage with Linear
+- **Nothing to provision or pay for**; start-up is one command, and Docker is not needed
+- **Simple to test**: repositories run against in-memory SQLite
 
 ### Negative
 
-- **Single point of failure**: relay outage affects all dispatchers
-  (mitigated by AWS's own reliability SLAs, not anything this system does)
-- **Latency hop**: webhooks go through relay before reaching dispatchers
-  (negligible, tens of ms)
-- **Cold starts**: first invocation after idle has ~500ms-1s overhead;
-  acceptable for webhook delivery, not for anything latency-sensitive
-- **Vendor lock-in**: tightly coupled to AWS Lambda/DynamoDB APIs
+- **Availability is the developer's machine.** Linear's webhooks are not received while the machine or tunnel is down, and the relay does not retry or queue (see [ADR 0003](0003-webhook-routing-and-delivery.md)).
+- **A public URL is required**, so the relay endpoints are reachable from the internet. Subscriber changes are authenticated by secret and delivery endpoints are validated, see [ADR 0002](0002-oauth-and-subscriber-registration.md).
+- **Single process, single file**: not built for several relay instances at once.
 
 ## Alternatives Considered
 
-| Approach                                                       | Rejected because                                                                                                                                                |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decentralized (each dispatcher does its own OAuth with Linear) | N OAuth apps, credential sprawl, no central delivery visibility                                                                                                 |
-| Relay embedded in each dispatcher's environment                | Defeats the purpose — relay would need to scale per-team instead of once                                                                                        |
-| Event bus (SNS/SQS) between relay and dispatchers              | Added latency and infrastructure for guarantees this workload doesn't need; still needs an OAuth gateway regardless                                             |
-| EC2/ECS/App Runner instead of Lambda                           | Pay for always-on capacity at near-zero traffic; more ops for no benefit at this scale                                                                          |
-| RDS instead of DynamoDB                                        | Same always-on cost problem, for data that doesn't need relational queries                                                                                      |
-| Express instead of NestJS on Fastify                           | Manual error handling/validation/logging boilerplate NestJS gives for free; Fastify chosen over Express specifically for the Lambda adapter, see Decision above |
+| Approach                                             | Rejected because                                                                                                                                       |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Each dispatcher does its own OAuth with Linear       | N OAuth apps, credential sprawl, no central delivery visibility                                                                                        |
+| Relay on AWS Lambda + DynamoDB (the original design) | Needs an AWS account, deployment and Docker for local DynamoDB, for a system used by one developer or team on their own machines; removed, see History |
+| Event bus (SNS/SQS) between relay and dispatchers    | Latency and infrastructure for guarantees this workload doesn't need                                                                                   |
+| Always-on server or RDS                              | Operating cost and effort with no benefit at this scale                                                                                                |
+| Express instead of NestJS on Fastify                 | Manual error handling, validation and logging boilerplate that NestJS provides                                                                         |
 
-## Implementation Notes
+## History
 
-- Relay registers with Linear OAuth as a single "app" for the organization
-- Dispatcher security is managed via HMAC-SHA256 signed requests from relay
-  (see [ADR 0002](0002-oauth-and-subscriber-registration.md))
-- Webhook delivery is idempotent (dispatcher deduplicates by delivery ID),
-  but the relay itself does not retry failed deliveries — see
-  [ADR 0003](0003-webhook-routing-and-delivery.md)
-- Local dev: `sst dev` simulates Lambda; local DynamoDB via the
-  `amazon/dynamodb-local` Docker image (`services/relay-service/scripts/setup-local-dynamodb.js`)
-- No test suite currently exists for `relay-service` itself. The shared
-  `webhook-verify` package it depends on for parsing/signing does have unit
-  tests (`node --test`) — the highest-value place tests exist today, since
-  it's what both relay and dispatcher trust to interpret Linear's payloads
-  correctly.
+The first version targeted AWS: Lambda + API Gateway for hosting, DynamoDB single-table storage with a shared GSI and write-sharded delivery keys, an SST stack, a scheduled Lambda for stale-subscriber cleanup, and an authenticated `/admin` API for listing and revoking subscribers. When it became clear the relay would only ever run locally, all of that was removed: the infrastructure stack, the Lambda adapter package, the DynamoDB client, the admin API, and the unauthenticated `POST /subscribers/register` endpoint (the OAuth callback is the only way a subscriber is registered). To go back to a hosted relay, replace the two repositories behind `SUBSCRIBER_REGISTRY_REPOSITORY` and `WEBHOOK_DELIVERIES_REPOSITORY`; nothing else depends on SQLite.
 
 ## References
 

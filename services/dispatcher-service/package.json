@@ -19,7 +19,6 @@
     "routes": "ts-node src/cli/routes.ts"
   },
   "dependencies": {
-    "@api-gateway/serverless-express": "workspace:*",
     "@linear-agent/env-file": "workspace:*",
     "@linear-agent/linear-client": "workspace:*",
     "@nestjs/common": "^11.0.0",
@@ -37,6 +36,7 @@
     "nestjs-pino": "^4.6.0",
     "pg": "^8.11.3",
     "pino": "^8.17.0",
+    "rxjs": "^7.8.2",
     "typeorm": "^0.3.19",
     "zod": "^4.6.6"
   },
