@@ -185,3 +185,84 @@ test('verifyLinearSignature rejects wrong, truncated or missing signatures witho
   assert.equal(verifyLinearSignature(body, signature.slice(0, 10), 'secret'), false);
   assert.equal(verifyLinearSignature(body, undefined, 'secret'), false);
 });
+
+test('parseLinearWebhook reads an agent session envelope and leaves team/assignee/labels empty', () => {
+  const event = parseLinearWebhook({
+    type: 'AgentSessionEvent',
+    action: 'created',
+    createdAt: '2026-10-11T10:00:00.000Z',
+    organizationId: 'org_1',
+    agentSession: { id: 'sess_1', issueId: 'issue_1' },
+  });
+
+  assert.equal(event.type, 'AgentSession');
+  assert.equal(event.sessionId, 'sess_1');
+  assert.equal(event.issueId, 'issue_1');
+  assert.deepEqual(event.labels, []);
+  assert.equal(event.teamKey, undefined);
+  assert.equal(
+    event.idempotencyKey,
+    `session:sess_1:created:${new Date('2026-10-11T10:00:00.000Z').getTime()}`,
+  );
+});
+
+test('parseLinearWebhook tolerates null assignee/state and string or object labels', () => {
+  const event = parseLinearWebhook({
+    webhookId: 'wh_1',
+    action: 'create',
+    createdAt: '2026-10-11T10:00:00.000Z',
+    organizationId: 'org_1',
+    data: {
+      id: 'issue_1',
+      identifier: 'DLA-1',
+      title: 'Title',
+      team: { id: 'team_1', key: 'DLA' },
+      assignee: null,
+      state: null,
+      labels: ['plain', { id: 'l1', name: 'object' }],
+    },
+  });
+
+  assert.equal(event.assigneeId, undefined);
+  assert.equal(event.stateType, undefined);
+  assert.deepEqual(event.labels, ['plain', 'object']);
+  assert.equal(event.issueIdentifier, 'DLA-1');
+});
+
+test('parseLinearWebhook rejects malformed payloads with the offending paths, never echoing the payload', () => {
+  const secret = 'do-not-leak-this-value';
+  for (const bad of [
+    null,
+    'text',
+    42,
+    {},
+    { webhookId: 'w', createdAt: 'x', data: 'nope', secret },
+  ]) {
+    assert.throws(
+      () => parseLinearWebhook(bad),
+      (error: Error) => {
+        assert.match(error.message, /Invalid Linear webhook payload|Missing required/);
+        assert.equal(error.message.includes(secret), false);
+        return true;
+      },
+    );
+  }
+  assert.throws(
+    () =>
+      parseLinearWebhook({
+        webhookId: 'w',
+        createdAt: '2026-10-11T10:00:00.000Z',
+        data: { id: 'i', team: { id: 't' } },
+      }),
+    /Missing required fields/,
+  );
+  assert.throws(
+    () =>
+      parseLinearWebhook({
+        type: 'AgentSessionEvent',
+        createdAt: '2026-10-11T10:00:00.000Z',
+        agentSession: { id: 's' },
+      }),
+    /agentSession\.issueId|organizationId/,
+  );
+});

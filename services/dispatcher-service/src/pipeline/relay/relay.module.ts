@@ -14,8 +14,7 @@ import { PreflightModule } from '../../ops/preflight/preflight.module';
 import { NullIssueContextResolver } from '../dispatcher/null-issue-context-resolver';
 import { LinearDispatchAdapter } from '../dispatcher/linear-dispatch.adapter';
 import { RoutingConfigService } from '../../config/routing-config.service';
-import { ActivityNotifierService } from '../executor/activity-notifier.service';
-import { IssueCommentService } from '../executor/issue-comment.service';
+import { RunFeedbackService } from '../executor/run-feedback.service';
 import type { DispatcherConfig } from '../../config/config';
 
 const issueContextResolverProvider: Provider = {
@@ -32,16 +31,12 @@ const issueContextResolverProvider: Provider = {
 // through the same /webhooks/relay endpoint from relay-service.
 const dispatchAdapterRegistryProvider: Provider = {
   provide: 'DispatchAdapterRegistry',
-  useFactory: (
-    routingConfig: RoutingConfigService,
-    activityNotifier: ActivityNotifierService,
-    issueComments: IssueCommentService,
-  ) => {
+  useFactory: (routingConfig: RoutingConfigService, feedback: RunFeedbackService) => {
     const registry = new AdapterRegistry<DispatchAdapter>();
-    registry.register(new LinearDispatchAdapter(routingConfig, activityNotifier, issueComments));
+    registry.register(new LinearDispatchAdapter(routingConfig, feedback));
     return registry;
   },
-  inject: [RoutingConfigService, ActivityNotifierService, IssueCommentService],
+  inject: [RoutingConfigService, RunFeedbackService],
 };
 
 @Module({

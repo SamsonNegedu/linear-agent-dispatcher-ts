@@ -73,17 +73,6 @@ A terminal dashboard (`packages/monitor-tui`, built with Bun + React + [OpenTUI]
 Webhook verification (HMAC-SHA256) and relay authentication (Linear OAuth) are covered above. Beyond that:
 
 - **Audit trail**: All deliveries logged with 30-day retention (TTL)
-- **Safe by default**: Admin API disabled unless `ADMIN_API_TOKEN` is set
-
-## Admin API
-
-Optional programmatic access to subscriber and delivery logs (requires `ADMIN_API_TOKEN` env var):
-
-```bash
-GET  /admin/subscribers?teamKey=<key>          # List subscribers
-DELETE /admin/subscribers/:subscriberId        # Revoke subscriber
-GET  /admin/deliveries?teamKey=<key>&limit=50 # View delivery history
-```
 
 ## Development
 

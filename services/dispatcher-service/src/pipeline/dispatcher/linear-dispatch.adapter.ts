@@ -7,8 +7,7 @@ import type {
 } from '@webhook-verify/core';
 import { ValidationError, IncompleteLabelsError } from '@webhook-verify/core';
 import { RoutingConfigService } from '../../config/routing-config.service';
-import { ActivityNotifierService } from '../executor/activity-notifier.service';
-import { IssueCommentService } from '../executor/issue-comment.service';
+import { RunFeedbackService } from '../executor/run-feedback.service';
 
 // Mode labels determine which Claude skill to invoke for an issue. Teams
 // define their own mode labels in routing.config.json (any naming
@@ -28,8 +27,7 @@ export class LinearDispatchAdapter implements DispatchAdapter {
 
   constructor(
     private readonly routingConfig: RoutingConfigService,
-    private readonly activityNotifier: ActivityNotifierService,
-    private readonly issueComments: IssueCommentService,
+    private readonly feedback: RunFeedbackService,
   ) {}
 
   /**
@@ -140,11 +138,7 @@ export class LinearDispatchAdapter implements DispatchAdapter {
    * - Issue webhooks: post comment (plain feedback on issue thread)
    */
   async postFeedback(event: NormalizedEvent, message: string): Promise<void> {
-    if (event.sessionId) {
-      await this.activityNotifier.postElicitation(event.sessionId, message);
-    } else if (event.issueId) {
-      await this.issueComments.postRequired(event.issueId, message);
-    }
+    await this.feedback.needsInput({ issueId: event.issueId, sessionId: event.sessionId }, message);
   }
 
   private validateAndResolveDomainLabel(labels: string[]): {

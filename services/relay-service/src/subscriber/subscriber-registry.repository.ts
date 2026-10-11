@@ -52,25 +52,6 @@ export class SubscriberRegistry {
     return subscribers.filter((s) => s.linearUserId === linearUserId);
   }
 
-  async getAllSubscribers(): Promise<SubscriberRecord[]> {
-    // Query primary table for all subscriber records
-    const result = await this.client.query({
-      TableName: this.tableName,
-      KeyConditionExpression: 'begins_with(pKey, :prefix)',
-      ExpressionAttributeValues: {
-        ':prefix': 'SUBSCRIBER#',
-      },
-    });
-
-    const subscribers = (result.Items || []).map((item) =>
-      this.fromDynamoItem(item as Record<string, unknown>),
-    );
-    // Sort by registration date (newest first)
-    return subscribers.sort(
-      (a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime(),
-    );
-  }
-
   async upsertSubscriber(
     record: Omit<SubscriberRecord, 'registeredAt' | 'lastSeenAt' | 'version'>,
   ): Promise<SubscriberRecord> {

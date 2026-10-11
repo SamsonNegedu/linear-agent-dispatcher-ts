@@ -80,45 +80,4 @@ export class WebhookDeliveries {
       values,
     );
   }
-
-  async listByTeam(teamKey: string, limit: number = 50): Promise<WebhookDeliveryRecord[]> {
-    // Fan out across all shards and collect results
-    const allResults: Record<string, unknown>[] = [];
-
-    for (let shardId = 0; shardId < SHARD_COUNT; shardId++) {
-      const items = await this.client.queryAllItems<Record<string, unknown>>({
-        TableName: this.tableName,
-        IndexName: 'GSI1',
-        KeyConditionExpression: 'GSI1pKey = :gsi1pKey AND begins_with(GSI1sKey, :prefix)',
-        ExpressionAttributeValues: {
-          ':gsi1pKey': gsi1pKey(teamKey, shardId),
-          ':prefix': 'DELIVERY#',
-        },
-        ScanIndexForward: false,
-      });
-
-      allResults.push(...items);
-    }
-
-    // Sort by timestamp descending and cap at limit
-    allResults.sort((a, b) => {
-      const timeA = (a.timestamp as string) || '';
-      const timeB = (b.timestamp as string) || '';
-      return timeB.localeCompare(timeA);
-    });
-
-    return allResults.slice(0, limit).map((item) => ({
-      deliveryId: item.deliveryId as string,
-      timestamp: item.timestamp as string,
-      subscriberId: item.subscriberId as string,
-      teamKey: item.teamKey as string,
-      webhookId: item.webhookId as string,
-      issueId: item.issueId as string,
-      issueIdentifier: item.issueIdentifier as string,
-      status: item.status as WebhookDeliveryRecord['status'],
-      responseTime: item.responseTime as number | undefined,
-      errorMessage: item.errorMessage as string | undefined,
-      linearAssigneeId: item.linearAssigneeId as string | undefined,
-    }));
-  }
 }

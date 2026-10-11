@@ -24,24 +24,4 @@ export const ROW_COLUMNS = {
   ] satisfies RowColumn[],
 };
 
-export const TAB_NAMES = [
-  'Dashboard',
-  'Logs',
-  'Relay',
-  'Runs',
-  'Needs input',
-  'Completed',
-  'Failed',
-] as const;
-
-export type TabName = (typeof TAB_NAMES)[number];
-
-export const TAB: Record<TabName, number> = TAB_NAMES.reduce(
-  (acc, name, index) => {
-    acc[name] = index;
-    return acc;
-  },
-  {} as Record<TabName, number>,
-);
-
 export const POLL_INTERVAL_MS = 1000;

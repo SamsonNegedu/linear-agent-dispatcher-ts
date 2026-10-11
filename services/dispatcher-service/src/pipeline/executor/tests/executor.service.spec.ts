@@ -5,8 +5,7 @@ import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import { StoreModule } from '../../../store/store.module';
 import { ClaudeAgentService } from '../claude-agent.service';
 import { McpServerDiscoveryService } from '../mcp-server-discovery.service';
-import { ActivityNotifierService } from '../activity-notifier.service';
-import { IssueCommentService } from '../issue-comment.service';
+import { RunFeedbackService } from '../run-feedback.service';
 import type { IStoreRepository, Run } from '../../../store/store.interfaces';
 import type { NormalizedEvent } from '@webhook-verify/core';
 
@@ -46,8 +45,7 @@ function makeEvent(): NormalizedEvent {
 describe('ExecutorService.executeRun', () => {
   let store: jest.Mocked<IStoreRepository>;
   let claudeAgent: jest.Mocked<ClaudeAgentService>;
-  let activityNotifier: jest.Mocked<ActivityNotifierService>;
-  let issueComments: jest.Mocked<IssueCommentService>;
+  let feedback: jest.Mocked<RunFeedbackService>;
   let service: ExecutorService;
 
   beforeEach(async () => {
@@ -57,18 +55,12 @@ describe('ExecutorService.executeRun', () => {
       completeRun: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<IStoreRepository>;
     claudeAgent = { spawn: jest.fn() } as unknown as jest.Mocked<ClaudeAgentService>;
-    activityNotifier = {
-      postStart: jest.fn().mockResolvedValue(undefined),
-      postSuccess: jest.fn().mockResolvedValue(undefined),
-      postError: jest.fn().mockResolvedValue(undefined),
-      postElicitation: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<ActivityNotifierService>;
-    issueComments = {
-      postProgress: jest.fn().mockResolvedValue(undefined),
-      postSuccess: jest.fn().mockResolvedValue(undefined),
-      postFailure: jest.fn().mockResolvedValue(undefined),
-      postRequired: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<IssueCommentService>;
+    feedback = {
+      started: jest.fn().mockResolvedValue(undefined),
+      succeeded: jest.fn().mockResolvedValue(undefined),
+      failed: jest.fn().mockResolvedValue(undefined),
+      needsInput: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<RunFeedbackService>;
 
     const module = await Test.createTestingModule({ imports: [ExecutorModule] })
       .overrideModule(StoreModule)
@@ -79,10 +71,8 @@ describe('ExecutorService.executeRun', () => {
       .useValue(claudeAgent)
       .overrideProvider(McpServerDiscoveryService)
       .useValue({ allowRules: jest.fn().mockResolvedValue([]) })
-      .overrideProvider(ActivityNotifierService)
-      .useValue(activityNotifier)
-      .overrideProvider(IssueCommentService)
-      .useValue(issueComments)
+      .overrideProvider(RunFeedbackService)
+      .useValue(feedback)
       .compile();
 
     service = module.get(ExecutorService);
@@ -96,99 +86,74 @@ describe('ExecutorService.executeRun', () => {
     expect(store.markRunning).not.toHaveBeenCalled();
   });
 
-  it('posts session activities and completes the run on success (agent session run)', async () => {
+  const sessionTarget = { issueId: 'issue_1', sessionId: 'session_1' };
+  const issueTarget = { issueId: 'issue_1', sessionId: undefined };
+
+  it('reports start and success to the session and completes the run (agent session run)', async () => {
     store.getRun.mockResolvedValue(makeRun({ providerSessionId: 'session_1' }));
     claudeAgent.spawn.mockResolvedValue({ status: 'succeeded', sessionId: 'claude_session_1' });
 
     await service.executeRun('run_1', makeEvent());
 
     expect(store.markRunning).toHaveBeenCalledWith('run_1');
-    expect(activityNotifier.postStart).toHaveBeenCalledWith(
-      'session_1',
-      'ISSUE-1',
-      'repo-a',
-      'implement',
-      'run_1',
-    );
-    expect(activityNotifier.postSuccess).toHaveBeenCalled();
-    expect(issueComments.postSuccess).not.toHaveBeenCalled();
+    expect(feedback.started).toHaveBeenCalledWith(sessionTarget, {
+      repoLabel: 'repo-a',
+      skill: 'implement',
+      runId: 'run_1',
+      issueIdentifier: 'ISSUE-1',
+    });
+    expect(feedback.succeeded).toHaveBeenCalledWith(sessionTarget, expect.any(String));
     expect(store.completeRun).toHaveBeenCalledWith(
       'run_1',
       expect.objectContaining({ status: 'succeeded', claudeSessionId: 'claude_session_1' }),
     );
   });
 
-  it('posts issue comments and completes the run on success (non-session run)', async () => {
+  it('targets the issue when the run has no agent session', async () => {
     store.getRun.mockResolvedValue(makeRun({ providerSessionId: undefined }));
     claudeAgent.spawn.mockResolvedValue({ status: 'succeeded' });
 
     await service.executeRun('run_1', makeEvent());
 
-    expect(issueComments.postProgress).toHaveBeenCalledWith(
-      'issue_1',
-      'repo-a',
-      'implement',
-      'run_1',
-    );
-    expect(issueComments.postSuccess).toHaveBeenCalled();
-    expect(activityNotifier.postStart).not.toHaveBeenCalled();
+    expect(feedback.started).toHaveBeenCalledWith(issueTarget, expect.anything());
+    expect(feedback.succeeded).toHaveBeenCalledWith(issueTarget, expect.any(String));
   });
 
-  it('completes the run as needs_input and posts the question as an elicitation (agent session run)', async () => {
+  it('completes the run as needs_input and posts the question', async () => {
     store.getRun.mockResolvedValue(makeRun({ providerSessionId: 'session_1' }));
+    const question = 'Stop rule: the issue conflicts with an RFC. Recommend option A.';
     claudeAgent.spawn.mockResolvedValue({
       status: 'needs_input',
       exitCode: 0,
-      resultText: 'Stop rule: the issue conflicts with an RFC. Recommend option A.',
-      errorSnippet: 'Stop rule: the issue conflicts with an RFC. Recommend option A.',
+      resultText: question,
+      errorSnippet: question,
     });
 
     await service.executeRun('run_1', makeEvent());
 
-    expect(activityNotifier.postElicitation).toHaveBeenCalledWith(
-      'session_1',
-      'Stop rule: the issue conflicts with an RFC. Recommend option A.',
-    );
-    expect(activityNotifier.postSuccess).not.toHaveBeenCalled();
-    expect(activityNotifier.postError).not.toHaveBeenCalled();
+    expect(feedback.needsInput).toHaveBeenCalledWith(sessionTarget, question);
+    expect(feedback.succeeded).not.toHaveBeenCalled();
+    expect(feedback.failed).not.toHaveBeenCalled();
     expect(store.completeRun).toHaveBeenCalledWith(
       'run_1',
       expect.objectContaining({ status: 'needs_input' }),
     );
   });
 
-  it('posts the question as an action-required comment for a non-session run', async () => {
-    store.getRun.mockResolvedValue(makeRun({ providerSessionId: undefined }));
-    claudeAgent.spawn.mockResolvedValue({
-      status: 'needs_input',
-      exitCode: 0,
-      resultText: 'Stop rule: which design token?',
-    });
-
-    await service.executeRun('run_1', makeEvent());
-
-    expect(issueComments.postRequired).toHaveBeenCalledWith(
-      'issue_1',
-      'Stop rule: which design token?',
-    );
-    expect(issueComments.postSuccess).not.toHaveBeenCalled();
-    expect(issueComments.postFailure).not.toHaveBeenCalled();
-  });
-
-  it('posts a failure activity and completes the run as failed when the agent run fails', async () => {
+  it('reports a failed agent run and completes the run as failed', async () => {
     store.getRun.mockResolvedValue(makeRun({ providerSessionId: 'session_1' }));
     claudeAgent.spawn.mockResolvedValue({ status: 'failed', exitCode: 1, errorSnippet: 'boom' });
 
     await service.executeRun('run_1', makeEvent());
 
-    expect(activityNotifier.postError).toHaveBeenCalledWith('session_1', 'boom');
+    expect(feedback.failed).toHaveBeenCalledWith(sessionTarget, 'boom');
     expect(store.completeRun).toHaveBeenCalledWith(
       'run_1',
       expect.objectContaining({ status: 'failed', errorSnippet: 'boom' }),
     );
   });
 
-  it('marks the run failed and posts feedback when spawning the agent throws unexpectedly', async () => {
+  it('marks the run failed and reports it when spawning the agent throws unexpectedly', async () => {
     store.getRun.mockResolvedValue(makeRun({ providerSessionId: undefined }));
     claudeAgent.spawn.mockRejectedValue(new Error('spawn ENOENT'));
 
@@ -198,6 +163,6 @@ describe('ExecutorService.executeRun', () => {
       'run_1',
       expect.objectContaining({ status: 'failed', errorSnippet: 'spawn ENOENT' }),
     );
-    expect(issueComments.postFailure).toHaveBeenCalledWith('issue_1', 'spawn ENOENT');
+    expect(feedback.failed).toHaveBeenCalledWith(issueTarget, 'spawn ENOENT');
   });
 });

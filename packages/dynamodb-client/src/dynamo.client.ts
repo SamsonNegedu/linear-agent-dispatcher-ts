@@ -1,39 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { add, Duration } from 'date-fns';
 import { DynamoDBClient, DynamoDBClientConfig } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  BatchGetCommand,
   PutCommand,
   UpdateCommand,
   PutCommandOutput,
   QueryCommand,
   QueryCommandInput,
   DeleteCommand,
-  BatchWriteCommand,
   UpdateCommandInput,
   UpdateCommandOutput,
   DeleteCommandInput,
   QueryCommandOutput,
-  BatchGetCommandInput,
-  BatchWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import { Key } from './types';
-import { buildUpdateExpression, chunk } from './utils';
+import { buildUpdateExpression } from './utils';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
 export { QueryCommandInput, QueryCommandOutput, PutCommandOutput } from '@aws-sdk/lib-dynamodb';
 export { NativeAttributeValue } from '@aws-sdk/util-dynamodb';
 
 const MAX_RETRIES = 5;
-// DynamoDB per-request limits
-const BATCH_GET_LIMIT = 100;
-const BATCH_WRITE_LIMIT = 25;
-
-/** DynamoDB reports "nothing left" as undefined or an empty object. */
-const nonEmpty = <T extends object>(value: T | undefined): T | undefined =>
-  value && Object.keys(value).length > 0 ? value : undefined;
-
 /**
  * Builds the DynamoDBClient config for local dev against DynamoDB Local
  * (docker), mirroring what the previous DynamoDBModule did.
@@ -103,28 +90,6 @@ export class DynamoClient {
     return withoutKeys as T;
   }
 
-  async batchGetItems<T>(table: string, keys: Key[]): Promise<T[]> {
-    const results: T[] = [];
-
-    for (const keyChunk of chunk(keys, BATCH_GET_LIMIT)) {
-      // DynamoDB may return only part of a batch (throttling, size limits) and reports the
-      // rest as UnprocessedKeys; those must be re-requested or the items are silently lost.
-      await this.retryUnprocessed<BatchGetCommandInput['RequestItems']>(
-        'BatchGetItems',
-        { [table]: { Keys: keyChunk } },
-        async (requestItems) => {
-          const response = await this.docClient.send(
-            new BatchGetCommand({ RequestItems: requestItems }),
-          );
-          results.push(...((response.Responses?.[table] ?? []) as T[]));
-          return nonEmpty(response.UnprocessedKeys);
-        },
-      );
-    }
-
-    return results;
-  }
-
   async putItem<T>(table: string, item: Partial<T>): Promise<PutCommandOutput> {
     return this.docClient.send(new PutCommand({ TableName: table, Item: item }));
   }
@@ -180,106 +145,5 @@ export class DynamoClient {
 
   async delete(command: DeleteCommandInput): Promise<void> {
     await this.docClient.send(new DeleteCommand(command));
-  }
-
-  async deleteItem(table: string, pKey: string, sKey: string): Promise<void> {
-    await this.delete({
-      TableName: table,
-      Key: { pKey, sKey },
-    });
-  }
-
-  async batchDeleteItems(table: string, keys: Key[]): Promise<void> {
-    await Promise.all(
-      chunk(keys, BATCH_WRITE_LIMIT).map((keyChunk) =>
-        this.batchWriteWithRetry(
-          'BatchDeleteItems',
-          table,
-          keyChunk.map((Key) => ({ DeleteRequest: { Key } })),
-        ),
-      ),
-    );
-  }
-
-  async batchWriteItems<T>(table: string, putItems: Partial<T>[]): Promise<void> {
-    await Promise.all(
-      chunk(putItems, BATCH_WRITE_LIMIT).map((itemChunk) =>
-        this.batchWriteWithRetry(
-          'BatchWriteItems',
-          table,
-          itemChunk.map((Item) => ({ PutRequest: { Item } })),
-        ),
-      ),
-    );
-  }
-
-  async putItemWithTTL<T>({
-    table,
-    item,
-    ttlSettings,
-  }: {
-    table: string;
-    item: Partial<T>;
-    ttlSettings: Duration;
-  }): Promise<PutCommandOutput> {
-    const now = new Date();
-
-    const validUntil = add(now, ttlSettings).getTime();
-
-    return this.putItem(table, { ...item, validUntil });
-  }
-
-  private async batchWriteWithRetry(
-    label: string,
-    table: string,
-    requests: NonNullable<BatchWriteCommandInput['RequestItems']>[string],
-  ): Promise<void> {
-    await this.retryUnprocessed<BatchWriteCommandInput['RequestItems']>(
-      label,
-      { [table]: requests },
-      async (requestItems) => {
-        const response = await this.docClient.send(
-          new BatchWriteCommand({ RequestItems: requestItems }),
-        );
-        return nonEmpty(response.UnprocessedItems);
-      },
-    );
-  }
-
-  /**
-   * Sends a batch request, re-sending whatever DynamoDB reports as unprocessed with
-   * exponential backoff, and throws if anything is still unprocessed after MAX_RETRIES attempts.
-   * `send` returns the unprocessed remainder, or undefined when everything went through.
-   */
-  private async retryUnprocessed<R>(
-    label: string,
-    initialRequest: R,
-    send: (request: R) => Promise<R | undefined>,
-  ): Promise<void> {
-    let request: R | undefined = initialRequest;
-
-    for (let attempt = 0; request; attempt++) {
-      const unprocessed = await send(request);
-      if (!unprocessed) return;
-
-      if (attempt + 1 >= MAX_RETRIES) {
-        throw new Error(`DynamoClient: ${label} request has unprocessed items after all retries.`);
-      }
-      await this.sleep(this.calculateRetryDelay(attempt));
-      this.logger.log(`DynamoClient: ${label} retrying`);
-      request = unprocessed;
-    }
-  }
-
-  /**
-   * Calculate the delay for the next retry attempt exponentially with jitter
-   * https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-   */
-  private calculateRetryDelay(retryCount: number): number {
-    return Math.ceil(Math.random() * (Math.pow(2, retryCount) * 100));
-  }
-
-  private async sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

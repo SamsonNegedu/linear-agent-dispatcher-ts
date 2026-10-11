@@ -53,7 +53,7 @@ records would suggest they were each weighed independently; they weren't.
 - NestJS over raw handlers or a minimal Express app: structure (modules,
   controllers, services) and built-in DI meaningfully help once you have
   more than one or two endpoints (webhook ingestion, subscriber
-  registration, OAuth start/callback, admin)
+  registration, OAuth start/callback)
 - Originally deployed on `@nestjs/platform-express` +
   `@codegenie/serverless-express`; migrated to `@nestjs/platform-fastify` +
   `@fastify/aws-lambda`. No functional gap forced the move — one explicit

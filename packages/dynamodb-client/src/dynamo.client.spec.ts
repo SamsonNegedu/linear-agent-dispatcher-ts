@@ -1,4 +1,4 @@
-import { BatchWriteCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { DynamoClient } from './dynamo.client';
 
 type Send = jest.Mock<
@@ -10,115 +10,10 @@ function makeClient(): { client: DynamoClient; send: Send } {
   const client = new DynamoClient();
   const send: Send = jest.fn();
   (client as unknown as { docClient: { send: Send } }).docClient = { send };
-  // Skip real backoff delays.
-  jest.spyOn(client as unknown as { sleep: () => Promise<void> }, 'sleep').mockResolvedValue();
   return { client, send };
 }
 
-const keys = (n: number) => Array.from({ length: n }, (_, i) => ({ pKey: `p${i}`, sKey: 's' }));
-
 describe('DynamoClient', () => {
-  describe('batchGetItems', () => {
-    it('sends nothing for an empty key list', async () => {
-      const { client, send } = makeClient();
-
-      await expect(client.batchGetItems('T', [])).resolves.toEqual([]);
-      expect(send).not.toHaveBeenCalled();
-    });
-
-    it('splits into requests of at most 100 keys', async () => {
-      const { client, send } = makeClient();
-      send.mockResolvedValue({ Responses: { T: [] } });
-
-      await client.batchGetItems('T', keys(250));
-
-      expect(send).toHaveBeenCalledTimes(3);
-      const sizes = send.mock.calls.map(
-        ([cmd]) =>
-          (cmd.input as { RequestItems: { T: { Keys: unknown[] } } }).RequestItems.T.Keys.length,
-      );
-      expect(sizes).toEqual([100, 100, 50]);
-    });
-
-    it('re-requests UnprocessedKeys so throttled items are not silently lost', async () => {
-      const { client, send } = makeClient();
-      send
-        .mockResolvedValueOnce({
-          Responses: { T: [{ id: 1 }] },
-          UnprocessedKeys: { T: { Keys: [{ pKey: 'p1', sKey: 's' }] } },
-        })
-        .mockResolvedValueOnce({ Responses: { T: [{ id: 2 }] } });
-
-      const result = await client.batchGetItems<{ id: number }>('T', keys(2));
-
-      expect(result).toEqual([{ id: 1 }, { id: 2 }]);
-      expect(send).toHaveBeenCalledTimes(2);
-      expect((send.mock.calls[1][0].input as { RequestItems: unknown }).RequestItems).toEqual({
-        T: { Keys: [{ pKey: 'p1', sKey: 's' }] },
-      });
-    });
-
-    it('throws when keys are still unprocessed after all retries', async () => {
-      const { client, send } = makeClient();
-      send.mockResolvedValue({
-        Responses: { T: [] },
-        UnprocessedKeys: { T: { Keys: [{ pKey: 'p', sKey: 's' }] } },
-      });
-
-      await expect(client.batchGetItems('T', keys(1))).rejects.toThrow(
-        /BatchGetItems.*unprocessed/,
-      );
-      expect(send).toHaveBeenCalledTimes(5);
-    });
-  });
-
-  describe('batch writes', () => {
-    it('chunks puts into requests of at most 25 items', async () => {
-      const { client, send } = makeClient();
-      send.mockResolvedValue({});
-
-      await client.batchWriteItems('T', keys(60));
-
-      expect(send).toHaveBeenCalledTimes(3);
-      expect(send.mock.calls.every(([cmd]) => cmd instanceof BatchWriteCommand)).toBe(true);
-    });
-
-    it('retries unprocessed delete requests', async () => {
-      const { client, send } = makeClient();
-      const unprocessed = { T: [{ DeleteRequest: { Key: { pKey: 'p0', sKey: 's' } } }] };
-      send
-        .mockResolvedValueOnce({ UnprocessedItems: unprocessed })
-        .mockResolvedValueOnce({ UnprocessedItems: {} });
-
-      await client.batchDeleteItems('T', keys(1));
-
-      expect(send).toHaveBeenCalledTimes(2);
-      expect((send.mock.calls[1][0].input as { RequestItems: unknown }).RequestItems).toEqual(
-        unprocessed,
-      );
-    });
-
-    it('throws after exhausting retries', async () => {
-      const { client, send } = makeClient();
-      send.mockResolvedValue({
-        UnprocessedItems: { T: [{ PutRequest: { Item: { pKey: 'p' } } }] },
-      });
-
-      await expect(client.batchWriteItems('T', [{ pKey: 'p' }])).rejects.toThrow(
-        /BatchWriteItems.*unprocessed/,
-      );
-    });
-
-    it('sends nothing for an empty list', async () => {
-      const { client, send } = makeClient();
-
-      await client.batchWriteItems('T', []);
-      await client.batchDeleteItems('T', []);
-
-      expect(send).not.toHaveBeenCalled();
-    });
-  });
-
   describe('queryAllItems', () => {
     it('follows LastEvaluatedKey across pages and returns every item', async () => {
       const { client, send } = makeClient();

@@ -133,7 +133,7 @@ export class ClaudeAgentService {
           // Keep the *end* of the stream: this is raw process stderr, where
           // the actual error/stack trace is typically the last thing
           // written — unlike the curated messages posted to Linear (see
-          // IssueCommentService/ActivityNotifierService), which lead with
+          // RunFeedbackService), which lead with
           // the salient point and are truncated from the start instead.
           errorSnippet = stderr.slice(-MAX_ERROR_MESSAGE_LENGTH);
         }

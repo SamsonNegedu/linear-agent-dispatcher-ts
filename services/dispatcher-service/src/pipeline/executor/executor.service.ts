@@ -1,9 +1,8 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import type { IStoreRepository } from '../../store/store.interfaces';
 import type { NormalizedEvent } from '@webhook-verify/core';
-import { ActivityNotifierService } from './activity-notifier.service';
 import { ClaudeAgentService } from './claude-agent.service';
-import { IssueCommentService } from './issue-comment.service';
+import { RunFeedbackService } from './run-feedback.service';
 
 @Injectable()
 export class ExecutorService {
@@ -12,8 +11,7 @@ export class ExecutorService {
   constructor(
     @Inject('IStoreRepository') private readonly store: IStoreRepository,
     private readonly claudeAgent: ClaudeAgentService,
-    private readonly activityNotifier: ActivityNotifierService,
-    private readonly issueComments: IssueCommentService,
+    private readonly feedback: RunFeedbackService,
   ) {}
 
   async executeRun(runId: string, event: NormalizedEvent): Promise<void> {
@@ -23,23 +21,19 @@ export class ExecutorService {
       return;
     }
 
+    const target = { issueId: run.issueId, sessionId: run.providerSessionId };
+
     try {
       // Mark run as running
       await this.store.markRunning(runId);
       this.logger.log(`Executing run: ${runId} in repo: ${run.repoPath}`);
 
-      // Post start feedback: agent session activity if available, otherwise a plain issue comment
-      if (run.providerSessionId) {
-        await this.activityNotifier.postStart(
-          run.providerSessionId,
-          run.issueIdentifier,
-          run.domainLabel,
-          run.skill,
-          runId,
-        );
-      } else {
-        await this.issueComments.postProgress(run.issueId, run.domainLabel, run.skill, runId);
-      }
+      await this.feedback.started(target, {
+        repoLabel: run.domainLabel,
+        skill: run.skill,
+        runId,
+        issueIdentifier: run.issueIdentifier,
+      });
 
       const result = await this.claudeAgent.spawn(run.skill, event.issueIdentifier, run.repoPath, {
         resumeSessionId: run.claudeSessionId,
@@ -62,27 +56,18 @@ export class ExecutorService {
         this.logger.error(`Run completed: ${runId} (${result.status}) - ${reason}`);
       }
 
-      // Post completion feedback: agent session activity if available, otherwise a plain issue comment
       const summary =
         result.resultText ||
         `Claude skill \`/${run.skill}\` completed successfully in \`${run.domainLabel}\` repo`;
-      const failureMessage = result.errorSnippet || `Run failed with exit code ${result.exitCode}`;
-      if (run.providerSessionId) {
-        if (result.status === 'succeeded') {
-          await this.activityNotifier.postSuccess(run.providerSessionId, summary);
-        } else if (result.status === 'needs_input') {
-          await this.activityNotifier.postElicitation(run.providerSessionId, summary);
-        } else {
-          await this.activityNotifier.postError(run.providerSessionId, failureMessage);
-        }
+      if (result.status === 'succeeded') {
+        await this.feedback.succeeded(target, summary);
+      } else if (result.status === 'needs_input') {
+        await this.feedback.needsInput(target, summary);
       } else {
-        if (result.status === 'succeeded') {
-          await this.issueComments.postSuccess(run.issueId, summary);
-        } else if (result.status === 'needs_input') {
-          await this.issueComments.postRequired(run.issueId, summary);
-        } else {
-          await this.issueComments.postFailure(run.issueId, failureMessage);
-        }
+        await this.feedback.failed(
+          target,
+          result.errorSnippet || `Run failed with exit code ${result.exitCode}`,
+        );
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -92,12 +77,7 @@ export class ExecutorService {
         errorSnippet: errorMsg,
       });
 
-      // Post error feedback: agent session activity if available, otherwise a plain issue comment
-      if (run.providerSessionId) {
-        await this.activityNotifier.postError(run.providerSessionId, (error as Error).message);
-      } else {
-        await this.issueComments.postFailure(run.issueId, (error as Error).message);
-      }
+      await this.feedback.failed(target, errorMsg);
     }
   }
 }

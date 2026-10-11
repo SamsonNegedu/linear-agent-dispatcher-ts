@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { z } from 'zod';
 
 import { safeEqual } from '../core/safe-equal';
 import type { DispatchDecision } from '../core/types';
@@ -55,180 +56,148 @@ export const verifyLinearSignature = (
   return safeEqual(signature, expected);
 };
 
-export const parseLinearWebhook = (payload: unknown): VerifiedEvent => {
-  const data = payload as Record<string, unknown>;
+// Linear's payloads vary by event and omit or null many fields, so every optional field is
+// `nullish`. Only what routing and idempotency need is read; the original is kept as rawPayload.
+const timestamp = z.union([z.string().min(1), z.number()]);
+const objectWithId = z.object({ id: z.string().optional() }).nullish();
+const label = z.union([
+  z.string(),
+  z.object({ id: z.string().optional(), name: z.string().optional() }),
+]);
 
-  // Detect envelope type: Issue webhooks have {webhookId, createdAt, data{...}},
-  // while AgentSession webhooks have {type: "AgentSessionEvent", createdAt, agentSession{...}}
-  const isAgentSessionEnvelope = data.type === 'AgentSessionEvent';
+const issueEnvelope = z.object({
+  webhookId: z.string().min(1),
+  createdAt: timestamp,
+  action: z.string().optional(),
+  organizationId: z.string().optional(),
+  // Previous values of the fields that changed; only present on "update" events.
+  updatedFrom: z.record(z.string(), z.unknown()).nullish(),
+  data: z.object({
+    id: z.string().optional(),
+    identifier: z.string().optional(),
+    title: z.string().optional(),
+    teamId: z.string().optional(),
+    team: z.object({ id: z.string().optional(), key: z.string().optional() }).nullish(),
+    assignee: objectWithId,
+    organization: objectWithId,
+    state: z.object({ type: z.string().optional() }).nullish(),
+    labels: z.array(label).catch([]),
+    labelIds: z.array(z.string()).catch([]),
+    agentSession: z.unknown().optional(),
+    agentSessionId: z.string().optional(),
+    sessionId: z.string().optional(),
+  }),
+});
 
-  if (isAgentSessionEnvelope) {
-    // Agent session envelope
-    if (!data.createdAt || !data.agentSession) {
-      throw new Error('Invalid Linear webhook payload structure');
-    }
-    return parseAgentSessionWebhook(data);
-  } else {
-    // Issue webhook envelope (classic structure)
-    if (!data.webhookId || !data.createdAt || !data.data) {
-      console.error(
-        'Invalid Linear webhook payload structure. Received:',
-        JSON.stringify(
-          {
-            type: data.type,
-            webhookId: data.webhookId,
-            createdAt: data.createdAt,
-            hasData: !!data.data,
-            keys: Object.keys(data),
-          },
-          null,
-          2,
-        ),
-      );
-      throw new Error('Invalid Linear webhook payload structure');
-    }
-    return parseIssueWebhook(data);
-  }
+const agentSessionEnvelope = z.object({
+  createdAt: timestamp,
+  action: z.string().optional(),
+  organizationId: z.string().min(1),
+  agentSession: z.object({ id: z.string().min(1), issueId: z.string().min(1) }),
+});
+
+const parseOrThrow = <T extends z.ZodType>(schema: T, payload: unknown): z.infer<T> => {
+  const result = schema.safeParse(payload);
+  if (result.success) return result.data;
+  // Paths and messages only: never echo the payload into logs or error responses.
+  const problems = result.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`);
+  throw new Error(`Invalid Linear webhook payload: ${problems.join('; ')}`);
 };
 
-const labelName = (label: unknown): string =>
-  typeof label === 'string' ? label : ((label as Record<string, unknown>).name as string);
+const labelName = (entry: z.infer<typeof label>): string | undefined =>
+  typeof entry === 'string' ? entry : entry.name;
 
-const parseIssueWebhook = (data: Record<string, unknown>): VerifiedEvent => {
-  const eventData = data.data as Record<string, unknown>;
+export const parseLinearWebhook = (payload: unknown): VerifiedEvent => {
+  const { type } = parseOrThrow(z.looseObject({ type: z.string().optional() }), payload);
+  // Classic Issue envelope: {webhookId, createdAt, action, data{...}}.
+  // Agent session envelope: {type: "AgentSessionEvent", createdAt, agentSession{...}}.
+  return type === 'AgentSessionEvent'
+    ? parseAgentSessionWebhook(payload)
+    : parseIssueWebhook(payload);
+};
 
-  // Extract webhook type (Issue or AgentSession from data)
-  const webhookType: WebhookType = eventData.agentSession ? 'AgentSession' : 'Issue';
+const parseIssueWebhook = (payload: unknown): VerifiedEvent => {
+  const envelope = parseOrThrow(issueEnvelope, payload);
+  const { data: issue, updatedFrom } = envelope;
 
-  // `eventData` (`data.data`) is the Issue entity itself, flat — Linear's classic
-  // Issue webhook envelope has no nested `data.data.issue` sub-object, so `id`,
-  // `identifier`, and `title` are read directly off it.
-  const team = (eventData.team || {}) as Record<string, unknown>;
-  const assignee = eventData.assignee as Record<string, unknown> | undefined;
-  const state = eventData.state as Record<string, unknown> | undefined;
-
-  const teamId = (team.id || eventData.teamId) as string;
-  const teamKey = team.key as string | undefined;
-  const issueId = eventData.id as string;
-  const issueIdentifier = eventData.identifier as string;
-  const issueTitle = eventData.title as string | undefined;
-  const assigneeId = assignee?.id as string | undefined;
-  const stateType = state?.type as string | undefined;
-  const organizationId = ((eventData.organization as Record<string, unknown> | undefined)?.id ||
-    data.organizationId) as string;
-
+  const teamId = issue.team?.id || issue.teamId;
+  const issueId = issue.id;
+  const organizationId = issue.organization?.id || envelope.organizationId;
   if (!teamId || !issueId || !organizationId) {
     throw new Error('Missing required fields: teamId, issueId, or organizationId');
   }
 
-  const labels = Array.isArray(eventData.labels) ? eventData.labels.map(labelName) : [];
+  const type: WebhookType = issue.agentSession ? 'AgentSession' : 'Issue';
+  const action = envelope.action as IssueAction | AgentSessionAction | undefined;
+  // `webhookId` identifies the subscription, not the delivery, so it can't dedupe. The
+  // envelope's `createdAt` is per-delivery and unchanged on Linear's retries, so
+  // issue + action + createdAt dedupes true retries but not distinct events.
+  const ts = new Date(envelope.createdAt).getTime();
 
-  // Extract Linear agent session ID if available (for activity tracking)
-  const sessionId = (eventData.agentSessionId || eventData.sessionId) as string | undefined;
-
-  // `updatedFrom` (sibling of `data`, only present on "update" events) holds
-  // the previous value of every field that changed in this specific webhook
-  // — nothing more. `changedFields` is a direct read of its keys (minus the
-  // always-present `updatedAt`), so it says exactly what changed, generically,
-  // for any field: labels, delegate, state, assignee, etc. A webhook where
-  // `updatedFrom` has ONLY `updatedAt` means no issue field actually changed
-  // — the only way that happens is something bumping the issue's timestamp
-  // without touching it directly, e.g. a comment being posted.
+  // Whether anything on the issue actually changed. A webhook whose `updatedFrom` holds only
+  // `updatedAt` means a side effect such as a comment bumped the timestamp.
   let changedFields: string[] | undefined;
   let labelChange: LabelChange | undefined;
-  if (webhookType === 'Issue') {
-    const updatedFrom = data.updatedFrom as Record<string, unknown> | undefined;
-    if (updatedFrom) {
-      changedFields = Object.keys(updatedFrom).filter((key) => key !== 'updatedAt');
-    }
+  if (type === 'Issue') {
+    if (updatedFrom) changedFields = Object.keys(updatedFrom).filter((key) => key !== 'updatedAt');
 
-    // Label names aren't in `updatedFrom` (it only has bare `labelIds`), so
-    // resolving `added` label names requires diffing against the current
-    // `labelIds`/`labels` arrays. Kept separate from `changedFields` because
-    // it needs this extra resolution step and only applies to one field.
-    const previousLabelIds = updatedFrom?.labelIds as string[] | undefined;
-    if (Array.isArray(previousLabelIds)) {
-      const currentLabelIds = Array.isArray(eventData.labelIds)
-        ? (eventData.labelIds as string[])
-        : [];
-      const addedIds = currentLabelIds.filter((id) => !previousLabelIds.includes(id));
-      const currentLabels = Array.isArray(eventData.labels)
-        ? (eventData.labels as Record<string, unknown>[])
-        : [];
-      const addedNames = addedIds
-        .map((id) => currentLabels.find((label) => label.id === id))
-        .filter((label): label is Record<string, unknown> => !!label)
-        .map(labelName);
-      labelChange = { added: addedNames, removed: [] };
+    // `updatedFrom` has only bare `labelIds`, so added label names come from diffing them
+    // against the current labels.
+    const previous = z.array(z.string()).safeParse(updatedFrom?.labelIds);
+    if (previous.success) {
+      const added = issue.labelIds
+        .filter((id) => !previous.data.includes(id))
+        .flatMap((id) => issue.labels.filter((l) => typeof l !== 'string' && l.id === id))
+        .map(labelName)
+        .filter((name): name is string => !!name);
+      labelChange = { added, removed: [] };
     }
   }
 
-  // `data.webhookId` identifies the webhook *subscription*, not the individual
-  // delivery — it's constant across every event Linear sends to it, so it must
-  // not be used as an idempotency key. The envelope's `createdAt` is per-delivery
-  // and is retried unchanged by Linear on non-2xx responses, so pairing it with
-  // the issue makes a key that dedupes true retries but not distinct events.
-  const timestamp = new Date(data.createdAt as string).getTime();
-  // `action` lives on the envelope itself (Linear's classic webhook shape is
-  // {action, type, createdAt, data: {...}}), not nested inside `data.data`.
-  const action = data.action as IssueAction | AgentSessionAction | undefined;
-
   return {
-    webhookId: data.webhookId as string,
-    idempotencyKey: `issue:${issueId}:${action}:${timestamp}`,
-    timestamp,
+    webhookId: envelope.webhookId,
+    idempotencyKey: `issue:${issueId}:${action}:${ts}`,
+    timestamp: ts,
     teamId,
-    teamKey,
-    assigneeId,
+    teamKey: issue.team?.key,
+    assigneeId: issue.assignee?.id,
     issueId,
-    issueIdentifier,
-    issueTitle,
-    labels,
-    stateType,
+    issueIdentifier: issue.identifier ?? '',
+    issueTitle: issue.title,
+    labels: issue.labels.map(labelName).filter((name): name is string => !!name),
+    stateType: issue.state?.type,
     organizationId,
-    sessionId,
-    type: webhookType,
+    sessionId: issue.agentSessionId || issue.sessionId,
+    type,
     action,
     labelChange,
     changedFields,
-    rawPayload: data,
+    rawPayload: payload,
   };
 };
 
-const parseAgentSessionWebhook = (data: Record<string, unknown>): VerifiedEvent => {
-  const session = data.agentSession as Record<string, unknown>;
-
-  // Agent sessions don't have team/assignee in the webhook envelope — they're
-  // just notifications that a session was created/prompted. We extract what we
-  // can (issueId, organizationId) and leave team/assignee empty so the relay
-  // can skip them (relay checks for teamKey/assigneeId and skips if missing).
-  const issueId = session.issueId as string;
-  const organizationId = data.organizationId as string;
-
-  if (!issueId || !organizationId) {
-    throw new Error('Missing required fields in AgentSession: issueId or organizationId');
-  }
-
-  const timestamp = new Date(data.createdAt as string).getTime();
-  const action = data.action as IssueAction | AgentSessionAction | undefined;
+// An agent session envelope carries no team, assignee, labels or issue identifier; those are
+// left empty so the relay skips it for lack of a teamKey/assigneeId.
+const parseAgentSessionWebhook = (payload: unknown): VerifiedEvent => {
+  const { agentSession: session, ...envelope } = parseOrThrow(agentSessionEnvelope, payload);
+  const action = envelope.action as IssueAction | AgentSessionAction | undefined;
+  const ts = new Date(envelope.createdAt).getTime();
 
   return {
-    webhookId: session.id as string, // Use session ID as a unique identifier
-    // session.id is constant across a session's lifecycle (created -> prompted),
-    // so it alone isn't a valid per-event key — pair with action + delivery time.
-    idempotencyKey: `session:${session.id as string}:${action}:${timestamp}`,
-    timestamp,
-    teamId: '', // Not available in agent session envelope
-    teamKey: undefined, // Not available — relay will skip due to missing teamKey
-    assigneeId: undefined, // Not available — relay will skip due to missing assigneeId
-    issueId,
-    issueIdentifier: '', // Not available in agent session envelope
-    labels: [], // Agent sessions don't have labels
-    organizationId,
-    sessionId: session.id as string, // Agent session ID for reference
+    webhookId: session.id,
+    // session.id is constant across a session's lifecycle (created -> prompted), so it alone
+    // isn't a per-event key; pair it with the action and delivery time.
+    idempotencyKey: `session:${session.id}:${action}:${ts}`,
+    timestamp: ts,
+    teamId: '',
+    issueId: session.issueId,
+    issueIdentifier: '',
+    labels: [],
+    organizationId: envelope.organizationId,
+    sessionId: session.id,
     type: 'AgentSession',
     action,
-    rawPayload: data,
+    rawPayload: payload,
   };
 };
 

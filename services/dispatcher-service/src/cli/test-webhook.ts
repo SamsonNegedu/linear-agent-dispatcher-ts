@@ -1,102 +1,18 @@
 #!/usr/bin/env node
-import * as fs from 'fs';
-import * as path from 'path';
-import * as http from 'http';
 import { randomUUID } from 'crypto';
+import { readEnvFile } from '@linear-agent/env-file';
 import { signWebhookPayload } from '@webhook-verify/core';
 import type { NormalizedEvent } from '@webhook-verify/core';
+import { CliError, envFilePath, parseFlags, runCli } from './cli-utils';
 
-interface CLIArgs {
-  issueId: string;
-  label: string;
-  teamKey?: string;
-  port?: number;
-  endpoint?: string;
-}
+const USAGE = `Usage: pnpm test-webhook --issue-id=<ID> --label=<REPO>,<MODE> [--team-key=<KEY>] [--port=<PORT>] [--endpoint=<URL>]
 
-function parseArgs(): CLIArgs {
-  const args: CLIArgs = {
-    issueId: '',
-    label: '',
-  };
+  pnpm test-webhook -- --issue-id=LIN-123 --label=my-repo,agent-implement
 
-  for (let i = 2; i < process.argv.length; i++) {
-    const arg = process.argv[i];
-    if (arg.startsWith('--issue-id=')) {
-      args.issueId = arg.split('=')[1];
-    } else if (arg.startsWith('--label=')) {
-      args.label = arg.split('=')[1];
-    } else if (arg.startsWith('--team-key=')) {
-      args.teamKey = arg.split('=')[1];
-    } else if (arg.startsWith('--port=')) {
-      args.port = parseInt(arg.split('=')[1], 10);
-    } else if (arg.startsWith('--endpoint=')) {
-      args.endpoint = arg.split('=')[1];
-    }
-  }
+--label takes the repo label and one mode label, comma-separated (see \`pnpm routes\`).`;
 
-  if (!args.issueId || !args.label) {
-    console.error(
-      'Usage: test-webhook --issue-id=<ID> --label=<REPO>,<MODE> [--team-key=<KEY>] [--port=<PORT>] [--endpoint=<URL>]',
-    );
-    console.error('');
-    console.error('Examples:');
-    console.error('  pnpm test-webhook -- --issue-id=LIN-123 --label=my-repo,agent-implement');
-    console.error(
-      '  pnpm test-webhook -- --issue-id=LIN-456 --label=my-repo,agent-plan --team-key=ENG',
-    );
-    console.error('');
-    console.error(
-      '--label takes the repo label and one mode label, comma-separated (see `pnpm routes`).',
-    );
-    process.exit(1);
-  }
-
-  return args;
-}
-
-function loadConfig() {
-  const envPath = path.join(process.cwd(), '.env.local');
-  if (!fs.existsSync(envPath)) {
-    console.error(
-      '.env.local not found. Make sure you are in services/dispatcher-service directory.',
-    );
-    process.exit(1);
-  }
-
-  const env: Record<string, string> = {};
-  const content = fs.readFileSync(envPath, 'utf-8');
-  for (const line of content.split('\n')) {
-    if (!line.trim() || line.startsWith('#')) continue;
-    const [key, ...valueParts] = line.split('=');
-    env[key.trim()] = valueParts.join('=').trim();
-  }
-
-  const secret = env['RELAY_SUBSCRIBER_SECRET'];
-  if (!secret) {
-    console.error(
-      'RELAY_SUBSCRIBER_SECRET not found in .env.local. Run "pnpm connect-relay" first.',
-    );
-    process.exit(1);
-  }
-
-  return {
-    secret,
-    port: parseInt(env['PORT'] || '3000', 10),
-    endpoint: env['DISPATCHER_WEBHOOK_ENDPOINT'] || 'http://localhost',
-  };
-}
-
-function createNormalizedEvent(args: CLIArgs): NormalizedEvent {
-  const issueId = args.issueId.includes('-') ? args.issueId : `TEST-${args.issueId}`;
-  const issueIdentifier = issueId;
-  const labels = args.label
-    .split(',')
-    .map((l) => l.trim())
-    .filter(Boolean);
-
+function createEvent(issueId: string, labels: string[], teamKey: string): NormalizedEvent {
   const timestamp = Date.now();
-
   return {
     provider: 'linear',
     kind: 'issue',
@@ -105,86 +21,63 @@ function createNormalizedEvent(args: CLIArgs): NormalizedEvent {
     timestamp,
     organizationId: 'org_test',
     issueId,
-    issueIdentifier,
-    ownerId: `user_test_${Date.now()}`,
-    routingKey: args.teamKey || 'DEFAULT',
+    issueIdentifier: issueId,
+    ownerId: `user_test_${timestamp}`,
+    routingKey: teamKey,
     routingTags: labels,
     isTerminal: false,
     action: 'update',
     changedFields: ['labelIds'],
-    labelChange: {
-      added: labels,
-      removed: [],
-    },
+    labelChange: { added: labels, removed: [] },
     rawPayload: {},
   };
 }
 
-async function sendWebhook(
-  event: NormalizedEvent,
-  config: ReturnType<typeof loadConfig>,
-): Promise<void> {
-  const payload = JSON.stringify(event);
-  const signature = signWebhookPayload(payload, config.secret);
-  const url = new URL(`${config.endpoint}:${config.port}/webhooks/relay`);
-
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: url.hostname,
-      port: url.port,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload),
-        'x-relay-signature': signature,
-      },
-    };
-
-    const req = http.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          console.log(`✓ Webhook sent successfully (${res.statusCode})`);
-          console.log(`  Response: ${data}`);
-          console.log('');
-          console.log('Watch logs:');
-          console.log('  1. Check dispatcher logs (pnpm dev:watch): look for "Received webhook"');
-          console.log(
-            '  2. Check database: sqlite3 ./data/dispatcher.db "SELECT * FROM issue_runs ORDER BY startedAt DESC LIMIT 1;"',
-          );
-          resolve();
-        } else {
-          reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
+runCli(async () => {
+  const { values } = parseFlags({
+    'issue-id': { type: 'string' },
+    label: { type: 'string' },
+    'team-key': { type: 'string' },
+    port: { type: 'string' },
+    endpoint: { type: 'string' },
   });
-}
+  if (!values['issue-id'] || !values.label) throw new CliError(USAGE);
 
-async function main() {
-  try {
-    const args = parseArgs();
-    const config = loadConfig();
-    const event = createNormalizedEvent(args);
-
-    console.log(
-      `Sending test webhook for issue ${event.issueIdentifier} with label "${args.label}"...`,
+  const env = readEnvFile(envFilePath());
+  const secret = env.RELAY_SUBSCRIBER_SECRET;
+  if (!secret) {
+    throw new CliError(
+      'RELAY_SUBSCRIBER_SECRET not found in .env.local. Run "pnpm connect-relay" first.',
     );
-    await sendWebhook(event, config);
-  } catch (error) {
-    console.error('Error:', error instanceof Error ? error.message : String(error));
-    process.exit(1);
   }
-}
 
-if (require.main === module) {
-  void main();
-}
+  const issueId = values['issue-id'].includes('-')
+    ? values['issue-id']
+    : `TEST-${values['issue-id']}`;
+  const labels = values.label
+    .split(',')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const event = createEvent(issueId, labels, values['team-key'] || 'DEFAULT');
+  const base = values.endpoint || env.DISPATCHER_WEBHOOK_ENDPOINT || 'http://localhost';
+  const url = `${base}:${values.port || env.PORT || '3000'}/webhooks/relay`;
+
+  console.log(
+    `Sending a test webhook for ${issueId} with labels ${labels.join(', ')} to ${url}...`,
+  );
+  const payload = JSON.stringify(event);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-relay-signature': signWebhookPayload(payload, secret),
+    },
+    body: payload,
+  });
+  const body = await response.text();
+  if (!response.ok) throw new CliError(`HTTP ${response.status}: ${body}`);
+
+  console.log(
+    `Sent (${response.status}): ${body}\nWatch the dispatcher logs or the monitor TUI for the run.`,
+  );
+});

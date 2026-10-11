@@ -37,7 +37,7 @@ Implement synchronous delivery with fallback logging:
 
 - **Idempotent**: webhook delivery ID allows dispatchers to deduplicate retries
 - **Fire-and-forget**: relay doesn't retry; if dispatcher fails, it logs and moves on
-- **Async fallback**: failed deliveries logged to DynamoDB for admin review
+- **Async fallback**: failed deliveries logged to DynamoDB (inspect them in the DynamoDB console)
 - **No queuing**: webhooks aren't queued; if delivery fails, dispatcher must re-fetch from Linear
 
 ### Logging
