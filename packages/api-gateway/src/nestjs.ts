@@ -52,10 +52,7 @@ export class ApiGatewayService {
       this.logger.log('[API Gateway] Bootstrapping NestJS application...');
 
       const adapter = new FastifyAdapter();
-      const nestApp = await NestFactory.create<NestFastifyApplication>(
-        this.config.module,
-        adapter,
-      );
+      const nestApp = await NestFactory.create<NestFastifyApplication>(this.config.module, adapter);
 
       // Set global prefix if provided
       if (this.config.globalPrefix) {

@@ -14,7 +14,13 @@ export interface TabData {
 }
 
 const runLine = (run: Run, extra: string[] = []): string =>
-  [run.domainLabel, run.issueIdentifier || '—', run.issueTitle || '(no title)', run.skill, ...extra].join('\t');
+  [
+    run.domainLabel,
+    run.issueIdentifier || '—',
+    run.issueTitle || '(no title)',
+    run.skill,
+    ...extra,
+  ].join('\t');
 
 /** Plain-text version of a tab, for the `y` (copy) key. */
 export function tabText(tab: TabName, data: TabData): string {
@@ -34,7 +40,9 @@ export function tabText(tab: TabName, data: TabData): string {
       return data.relayHealth ? JSON.stringify(data.relayHealth, null, 2) : '';
     case 'Runs':
       return [
-        ...data.activeRuns.map((r) => runLine(r, [formatTime(Date.now() - new Date(r.startedAt).getTime())])),
+        ...data.activeRuns.map((r) =>
+          runLine(r, [formatTime(Date.now() - new Date(r.startedAt).getTime())]),
+        ),
         ...data.queueRuns.map((r) => runLine(r, ['queued'])),
       ].join('\n');
     case 'Needs input':
@@ -44,7 +52,8 @@ export function tabText(tab: TabName, data: TabData): string {
     case 'Completed':
       return data.completedRuns.map((r) => runLine(r)).join('\n');
     case 'Failed':
-      return data.failedRuns.map((r) => [runLine(r), r.errorSnippet ?? ''].filter(Boolean).join('\n  ')).join('\n');
+      return data.failedRuns
+        .map((r) => [runLine(r), r.errorSnippet ?? ''].filter(Boolean).join('\n  '))
+        .join('\n');
   }
 }
-

@@ -31,28 +31,28 @@ Every dispatcher sits behind a relay. The difference between solo dev and team d
 
 ## Relay Service API
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `GET` | `/subscribers/auth/start` | Start OAuth authorization flow |
-| `GET` | `/callback` | OAuth callback (auto-registers all user's teams) |
-| `POST` | `/subscribers/register` | Manual subscriber registration |
-| `PATCH` | `/subscribers` | Update existing subscription endpoint |
-| `POST` | `/webhooks/linear` | Receive webhooks from Linear |
+| Method  | Endpoint                  | Purpose                                          |
+| ------- | ------------------------- | ------------------------------------------------ |
+| `GET`   | `/subscribers/auth/start` | Start OAuth authorization flow                   |
+| `GET`   | `/callback`               | OAuth callback (auto-registers all user's teams) |
+| `POST`  | `/subscribers/register`   | Manual subscriber registration                   |
+| `PATCH` | `/subscribers`            | Update existing subscription endpoint            |
+| `POST`  | `/webhooks/linear`        | Receive webhooks from Linear                     |
 
 **See [GETTING_STARTED.md](services/dispatcher-service/GETTING_STARTED.md) for full endpoint documentation and examples.**
 
 ## CLI Commands
 
-| Command | Purpose |
-|---------|---------|
-| `pnpm dev:up` | One command for local dev: infra, tunnel, relay, Linear connect, dispatcher and TUI (`-- --reconnect` re-authorizes) |
-| `pnpm routes` | Show repo → label → skill mappings (`routes check` exits 1 on a problem, `routes add <path>` registers a repo) |
-| `pnpm connect-relay` | Register a dispatcher with a shared relay (OAuth flow); `dev:up` does this for you locally |
-| `pnpm update-relay` | Move dispatcher to new server (update endpoint without re-auth) |
-| `pnpm test-webhook` | Test dispatch without a Linear issue |
-| `pnpm dev` | Start relay and dispatcher without the tunnel or TUI |
-| `pnpm lint` / `pnpm lint:fix` | [oxlint](https://oxc.rs/docs/guide/usage/linter) |
-| `pnpm format` / `pnpm format:check` | [oxfmt](https://oxc.rs/docs/guide/usage/formatter) |
+| Command                             | Purpose                                                                                                              |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev:up`                       | One command for local dev: infra, tunnel, relay, Linear connect, dispatcher and TUI (`-- --reconnect` re-authorizes) |
+| `pnpm routes`                       | Show repo → label → skill mappings (`routes check` exits 1 on a problem, `routes add <path>` registers a repo)       |
+| `pnpm connect-relay`                | Register a dispatcher with a shared relay (OAuth flow); `dev:up` does this for you locally                           |
+| `pnpm update-relay`                 | Move dispatcher to new server (update endpoint without re-auth)                                                      |
+| `pnpm test-webhook`                 | Test dispatch without a Linear issue                                                                                 |
+| `pnpm dev`                          | Start relay and dispatcher without the tunnel or TUI                                                                 |
+| `pnpm lint` / `pnpm lint:fix`       | [oxlint](https://oxc.rs/docs/guide/usage/linter)                                                                     |
+| `pnpm format` / `pnpm format:check` | [oxfmt](https://oxc.rs/docs/guide/usage/formatter)                                                                   |
 
 ## Monitor TUI
 
@@ -60,13 +60,13 @@ A terminal dashboard (`packages/monitor-tui`, built with Bun + React + [OpenTUI]
 
 `pnpm dev:up` opens it automatically; `cd services/dispatcher-service && pnpm monitor` starts it against a dispatcher it launches itself.
 
-| Key | Action |
-|-----|--------|
-| `↑↓` / `1`–`7` | Switch tab |
-| `y` | Copy the selection, or the current tab, to the system clipboard |
-| `m` | Toggle mouse capture (off lets the terminal select text; on gives wheel scrolling) |
-| `Ctrl+R` | Restart the dispatcher server in place (only when started via `pnpm monitor` / `dev:up`) |
-| `q` / `Ctrl+C` | Quit |
+| Key            | Action                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| `↑↓` / `1`–`7` | Switch tab                                                                               |
+| `y`            | Copy the selection, or the current tab, to the system clipboard                          |
+| `m`            | Toggle mouse capture (off lets the terminal select text; on gives wheel scrolling)       |
+| `Ctrl+R`       | Restart the dispatcher server in place (only when started via `pnpm monitor` / `dev:up`) |
+| `q` / `Ctrl+C` | Quit                                                                                     |
 
 ## Security
 

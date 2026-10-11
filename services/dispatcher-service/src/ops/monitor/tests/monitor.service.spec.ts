@@ -36,7 +36,11 @@ describe('MonitorService', () => {
     } as unknown as jest.Mocked<IStoreRepository>;
     routingConfig = {
       getAllRepositories: jest.fn().mockReturnValue([
-        { label: 'repo-a', path: '/repos/repo-a', issueLabelToSkill: { 'agent-implement': 'implement' } },
+        {
+          label: 'repo-a',
+          path: '/repos/repo-a',
+          issueLabelToSkill: { 'agent-implement': 'implement' },
+        },
         { label: 'repo-b', path: '/repos/repo-b' },
       ]),
     } as unknown as jest.Mocked<RoutingConfigService>;
@@ -60,7 +64,13 @@ describe('MonitorService', () => {
 
       const summary = await service.getSummary();
 
-      expect(summary.counts).toEqual({ pending: 0, running: 0, succeeded: 0, failed: 0, needs_input: 0 });
+      expect(summary.counts).toEqual({
+        pending: 0,
+        running: 0,
+        succeeded: 0,
+        failed: 0,
+        needs_input: 0,
+      });
     });
 
     it('lists every configured repo, even ones with no running runs', async () => {
@@ -76,7 +86,13 @@ describe('MonitorService', () => {
         expect.objectContaining({ repoPath: '/repos/repo-a', runningCount: 0, currentRuns: [] }),
         expect.objectContaining({ repoPath: '/repos/repo-b', runningCount: 0, currentRuns: [] }),
       ]);
-      expect(summary.counts).toEqual({ pending: 1, running: 2, succeeded: 5, failed: 1, needs_input: 3 });
+      expect(summary.counts).toEqual({
+        pending: 1,
+        running: 2,
+        succeeded: 5,
+        failed: 1,
+        needs_input: 3,
+      });
     });
 
     it('buckets running runs under the repo matching their repoPath', async () => {

@@ -83,7 +83,10 @@ describe('WebhookQueueService', () => {
 
   it('marks a row failed when dispatch throws, and continues processing the next queued row', async () => {
     const eventA = makeEvent({ issueIdentifier: 'ISSUE-1' });
-    const eventB = makeEvent({ issueIdentifier: 'ISSUE-2', idempotencyKey: 'issue:ISSUE-2:update:1' });
+    const eventB = makeEvent({
+      issueIdentifier: 'ISSUE-2',
+      idempotencyKey: 'issue:ISSUE-2:update:1',
+    });
     queueRepository.insert.mockResolvedValue({} as never);
     queueRepository.findOne
       .mockResolvedValueOnce({

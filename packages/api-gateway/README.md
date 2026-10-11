@@ -234,14 +234,14 @@ const apiGatewayHandler = new ApiGatewayService({
 ### Request Headers (Recognized)
 
 | Header             | Purpose                                                         |
-| ------------------ | ----------------------------------------------------------------|
+| ------------------ | --------------------------------------------------------------- |
 | `X-Request-Id`     | Request identifier (auto-generated if not provided)             |
 | `X-Correlation-Id` | Correlation ID for distributed tracing (defaults to request ID) |
 
 ### Response Headers (Set)
 
 | Header             | Purpose                          |
-| ------------------ | --------------------------------- |
+| ------------------ | -------------------------------- |
 | `X-Request-Id`     | Echo of request ID               |
 | `X-Correlation-Id` | Echo of correlation ID           |
 | `X-Response-Time`  | Request duration in milliseconds |

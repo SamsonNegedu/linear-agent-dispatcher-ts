@@ -19,7 +19,8 @@ export class RequestIdInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse<FastifyReply>();
 
     // Extract or generate request ID
-    const requestId = (request.headers[REQUEST_ID_HEADER.toLowerCase()] as string) || generateRequestId();
+    const requestId =
+      (request.headers[REQUEST_ID_HEADER.toLowerCase()] as string) || generateRequestId();
 
     // Extract correlation ID from incoming request (for distributed tracing)
     const correlationId =

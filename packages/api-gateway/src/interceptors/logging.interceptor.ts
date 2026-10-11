@@ -22,7 +22,15 @@ export interface LoggingConfig {
   logResponseBody?: boolean;
 }
 
-const DEFAULT_SKIP_PATHS = ['/health', '/healthz', '/ready', '/metrics', '/ping', '/monitor', '/status'];
+const DEFAULT_SKIP_PATHS = [
+  '/health',
+  '/healthz',
+  '/ready',
+  '/metrics',
+  '/ping',
+  '/monitor',
+  '/status',
+];
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {

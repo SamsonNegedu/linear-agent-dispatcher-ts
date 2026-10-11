@@ -19,7 +19,9 @@ describe('StaleRunReconciliationService', () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
-    store = { reconcileStaleRuns: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<IStoreRepository>;
+    store = {
+      reconcileStaleRuns: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<IStoreRepository>;
     service = new StaleRunReconciliationService(store, makeConfig());
   });
 

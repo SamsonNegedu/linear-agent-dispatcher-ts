@@ -12,7 +12,13 @@ test('parseEnv reads plain, exported and spaced assignments and ignores comments
 
 test('parseEnv keeps "=" inside values and handles quotes and inline comments', () => {
   const env = parseEnv(
-    ['URL=https://x.test/?a=b&c=d', 'Q1="has space # not a comment"', "Q2='lit\\n'", 'BARE=value # trailing', 'ESC="a\\"b\\\\c\\nd"'].join('\n'),
+    [
+      'URL=https://x.test/?a=b&c=d',
+      'Q1="has space # not a comment"',
+      "Q2='lit\\n'",
+      'BARE=value # trailing',
+      'ESC="a\\"b\\\\c\\nd"',
+    ].join('\n'),
   );
   assert.equal(env.URL, 'https://x.test/?a=b&c=d');
   assert.equal(env.Q1, 'has space # not a comment');
@@ -27,7 +33,16 @@ test('parseEnv lets a later definition win and tolerates CRLF', () => {
 
 test('formatValue quotes only when needed, and round-trips through parseEnv', () => {
   assert.equal(formatValue('abc123'), 'abc123');
-  for (const value of ['has space', 'with "quote"', 'back\\slash', 'multi\nline', '#hash', '', "it's", '$HOME']) {
+  for (const value of [
+    'has space',
+    'with "quote"',
+    'back\\slash',
+    'multi\nline',
+    '#hash',
+    '',
+    "it's",
+    '$HOME',
+  ]) {
     assert.equal(parseEnv(`K=${formatValue(value)}`).K, value, JSON.stringify(value));
   }
 });
@@ -45,7 +60,10 @@ test('upsertEnvVar uncomments a placeholder, and appends when the key is absent'
 
 test('upsertEnvVar treats the key literally (no regex surprises) and does not touch longer keys', () => {
   assert.equal(upsertEnvVar('A.B=1\nAXB=2\n', 'A.B', 'x'), 'A.B=x\nAXB=2\n');
-  assert.equal(upsertEnvVar('RELAY_URL_OLD=1\n', 'RELAY_URL', 'x'), 'RELAY_URL_OLD=1\nRELAY_URL=x\n');
+  assert.equal(
+    upsertEnvVar('RELAY_URL_OLD=1\n', 'RELAY_URL', 'x'),
+    'RELAY_URL_OLD=1\nRELAY_URL=x\n',
+  );
 });
 
 test('updateEnvFile creates the file readable only by its owner and keeps existing content', () => {

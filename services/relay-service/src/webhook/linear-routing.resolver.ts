@@ -18,7 +18,9 @@ export class LinearRoutingResolver implements RoutingResolver {
     }
 
     try {
-      this.logger.log(`Fetching issue ${event.issueId} to resolve assignee for agent session webhook`);
+      this.logger.log(
+        `Fetching issue ${event.issueId} to resolve assignee for agent session webhook`,
+      );
       const issueInfo = await this.client.fetchIssueAssignee(event.issueId);
       return { ownerId: issueInfo.assigneeId, routingKey: issueInfo.teamKey };
     } catch (error) {

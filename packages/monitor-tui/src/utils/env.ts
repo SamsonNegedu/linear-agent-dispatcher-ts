@@ -2,7 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import dotenv from 'dotenv';
 
-export const dispatcherDir = path.join(import.meta.dir, '..', '..', '..', '..', 'services', 'dispatcher-service');
+export const dispatcherDir = path.join(
+  import.meta.dir,
+  '..',
+  '..',
+  '..',
+  '..',
+  'services',
+  'dispatcher-service',
+);
 const envLocalPath = path.join(dispatcherDir, '.env.local');
 const envPath = fs.existsSync(envLocalPath) ? envLocalPath : path.join(dispatcherDir, '.env');
 

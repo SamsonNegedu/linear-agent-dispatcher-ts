@@ -79,7 +79,9 @@ export class AdminController {
       throw new HttpException('teamKey query parameter required', HttpStatus.BAD_REQUEST);
     }
 
-    const limit = limitStr ? Math.min(parseInt(limitStr, 10), MAX_DELIVERIES_LIMIT) : DEFAULT_DELIVERIES_LIMIT;
+    const limit = limitStr
+      ? Math.min(parseInt(limitStr, 10), MAX_DELIVERIES_LIMIT)
+      : DEFAULT_DELIVERIES_LIMIT;
     const records = await this.deliveries.listByTeam(teamKey, limit);
 
     return {

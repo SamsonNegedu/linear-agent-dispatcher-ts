@@ -8,7 +8,15 @@ import { Dot } from './Dot';
 export function NeedsInputTab({ runs }: { runs: Run[] }): React.ReactNode {
   const colors = useTheme();
   return (
-    <box style={{ border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', flexGrow: 1 }}>
+    <box
+      style={{
+        border: true,
+        borderStyle: 'rounded',
+        borderColor: colors.accent,
+        flexDirection: 'column',
+        flexGrow: 1,
+      }}
+    >
       {runs.length === 0 ? (
         <text fg={colors.muted}>Nothing waiting on you</text>
       ) : (
@@ -20,7 +28,8 @@ export function NeedsInputTab({ runs }: { runs: Run[] }): React.ReactNode {
                 <span fg={colors.needs_input} attributes={1}>
                   {run.domainLabel}
                 </span>{' '}
-                | {run.issueIdentifier}: {run.issueTitle || '(no title)'} <span fg={colors.muted}>/{run.skill}</span>
+                | {run.issueIdentifier}: {run.issueTitle || '(no title)'}{' '}
+                <span fg={colors.muted}>/{run.skill}</span>
               </text>
               {run.errorSnippet ? (
                 <text fg={colors.muted} wrapMode="word">

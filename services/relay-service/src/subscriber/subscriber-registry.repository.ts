@@ -62,11 +62,14 @@ export class SubscriberRegistry {
       },
     });
 
-    const subscribers = (result.Items || []).map((item) => this.fromDynamoItem(item as Record<string, unknown>));
+    const subscribers = (result.Items || []).map((item) =>
+      this.fromDynamoItem(item as Record<string, unknown>),
+    );
     // Sort by registration date (newest first)
-    return subscribers.sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime());
+    return subscribers.sort(
+      (a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime(),
+    );
   }
-
 
   async upsertSubscriber(
     record: Omit<SubscriberRecord, 'registeredAt' | 'lastSeenAt' | 'version'>,
@@ -127,7 +130,7 @@ export class SubscriberRegistry {
     return Promise.reject(
       new Error(
         'Updating by secret is not supported. Use subscriberId instead. ' +
-        'Run pnpm connect-relay again to save RELAY_SUBSCRIBER_ID to .env.local.',
+          'Run pnpm connect-relay again to save RELAY_SUBSCRIBER_ID to .env.local.',
       ),
     );
   }
@@ -153,7 +156,9 @@ export class SubscriberRegistry {
       },
     });
 
-    const subscribers = (result.Items || []).map((item) => this.fromDynamoItem(item as Record<string, unknown>));
+    const subscribers = (result.Items || []).map((item) =>
+      this.fromDynamoItem(item as Record<string, unknown>),
+    );
 
     let deleted = 0;
     for (const subscriber of subscribers) {

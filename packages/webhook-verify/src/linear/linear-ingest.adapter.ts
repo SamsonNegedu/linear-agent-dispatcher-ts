@@ -1,5 +1,10 @@
 import type { NormalizedEvent, WebhookIngestAdapter } from '../core/types';
-import { verifyLinearSignature, parseLinearWebhook, isTerminalStateType, type VerifiedEvent } from './index';
+import {
+  verifyLinearSignature,
+  parseLinearWebhook,
+  isTerminalStateType,
+  type VerifiedEvent,
+} from './index';
 
 /**
  * Quarantines everything Linear-specific about ingesting a webhook: its HMAC

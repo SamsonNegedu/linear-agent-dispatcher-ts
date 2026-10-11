@@ -16,7 +16,7 @@ restart.
 
 The subscriber ID was derived from `(teamKey, linearUserId,
 sha256(localEndpoint))`. Re-registering the same person for the same team
-from a *new* endpoint produced a brand-new subscriber ID rather than
+from a _new_ endpoint produced a brand-new subscriber ID rather than
 updating the existing row — even though `upsertSubscriber` itself already
 does correct overwrite-by-id semantics (look up by id, preserve
 `registeredAt`, bump `version`, overwrite the rest). Any two registrations
@@ -60,16 +60,16 @@ creating a second identity.
   same time (e.g., one on a laptop, one on a server) — the second
   registration overwrites the first's endpoint and secret, silently cutting
   the first off. Not a supported use case today; if it becomes one, the
-  identity would need a third, *explicit* discriminator (e.g., a
+  identity would need a third, _explicit_ discriminator (e.g., a
   user-chosen dispatcher name), not an incidental hash of the current
   endpoint.
 
 ## Alternatives Considered
 
-| Approach | Rejected because |
-|---|---|
-| Keep endpoint-hashed ID, add TTL/reap-stale cleanup for orphaned rows | Treats the symptom (registry bloat), not the cause (wrong identity key) — the double-delivery/signature-mismatch failure would still happen on every re-registration until the stale row eventually expired |
-| Keep endpoint-hashed ID, add a `PUT /subscribers/keepalive` + reap job | Same as above, plus meaningfully more infrastructure (new endpoint, scheduled Lambda, schema field) for a problem the identity-key fix removes outright |
+| Approach                                                               | Rejected because                                                                                                                                                                                            |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep endpoint-hashed ID, add TTL/reap-stale cleanup for orphaned rows  | Treats the symptom (registry bloat), not the cause (wrong identity key) — the double-delivery/signature-mismatch failure would still happen on every re-registration until the stale row eventually expired |
+| Keep endpoint-hashed ID, add a `PUT /subscribers/keepalive` + reap job | Same as above, plus meaningfully more infrastructure (new endpoint, scheduled Lambda, schema field) for a problem the identity-key fix removes outright                                                     |
 
 ## References
 

@@ -19,9 +19,8 @@ const healthUrl = `http://localhost:${port}/monitor/summary`;
   // Shared with scripts/dev-up.mjs: starts a service in its own process group so that
   // stopping it also stops the node process under `npx` (killing only the wrapper
   // would leave the server running and holding the port).
-  const { startService, killGroup, waitForHttp, waitForHttpDown } = await import(
-    '../../../scripts/lib/stack.mjs'
-  );
+  const { startService, killGroup, waitForHttp, waitForHttpDown } =
+    await import('../../../scripts/lib/stack.mjs');
 
   console.log(`Starting dispatcher server (logs: ${logFile})...`);
 

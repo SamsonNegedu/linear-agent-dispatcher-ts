@@ -42,13 +42,16 @@ for (const dir of [relayDir, dispatcherDir]) {
 {
   const relayFile = join(relayDir, '.env.local');
   const current = readEnv(relayFile);
-  const missing = ['LINEAR_OAUTH_CLIENT_ID', 'LINEAR_OAUTH_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET'].filter(
-    (k) => !current[k] || current[k].startsWith('your_'),
-  );
+  const missing = [
+    'LINEAR_OAUTH_CLIENT_ID',
+    'LINEAR_OAUTH_CLIENT_SECRET',
+    'LINEAR_WEBHOOK_SECRET',
+  ].filter((k) => !current[k] || current[k].startsWith('your_'));
   if (missing.length) {
     console.log('Enter your Linear app credentials (saved to services/relay-service/.env.local):');
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    for (const key of missing) updateEnvFile(relayFile, { [key]: (await rl.question(`  ${key}: `)).trim() });
+    for (const key of missing)
+      updateEnvFile(relayFile, { [key]: (await rl.question(`  ${key}: `)).trim() });
     rl.close();
   }
 }
@@ -56,14 +59,16 @@ for (const dir of [relayDir, dispatcherDir]) {
 const rootEnv = { ...readEnv(join(root, '.env')), ...process.env };
 const named = Boolean(rootEnv.CLOUDFLARE_TUNNEL_TOKEN && rootEnv.TUNNEL_HOSTNAME);
 
-const tailscaleBin = ['tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'].find((bin) => {
-  try {
-    execFileSync(bin, ['version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-});
+const tailscaleBin = ['tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'].find(
+  (bin) => {
+    try {
+      execFileSync(bin, ['version'], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+);
 const tailscaleHost = (() => {
   if (named || !tailscaleBin) return null;
   try {
@@ -78,7 +83,13 @@ const tunnelService = named ? 'tunnel-named' : 'tunnel';
 
 const relayEnv = readEnv(join(relayDir, '.env.local'));
 const relayPort = process.env.RELAY_PORT || relayEnv.PORT || '3001';
-const compose = ['compose', '-f', join(root, 'docker-compose.yml'), '--profile', named ? 'named' : 'quick'];
+const compose = [
+  'compose',
+  '-f',
+  join(root, 'docker-compose.yml'),
+  '--profile',
+  named ? 'named' : 'quick',
+];
 const composeEnv = { ...rootEnv, RELAY_PORT: relayPort };
 
 const children = [];
@@ -109,7 +120,9 @@ if (mode === 'tailscale') {
   try {
     run(tailscaleBin, ['funnel', '--bg', relayPort]);
   } catch {
-    console.error('Could not enable Tailscale Funnel. Enable it for your tailnet (admin console > Access controls > funnel) and retry.');
+    console.error(
+      'Could not enable Tailscale Funnel. Enable it for your tailnet (admin console > Access controls > funnel) and retry.',
+    );
     shutdown(1);
   }
 }
@@ -120,23 +133,23 @@ const tunnelUrl = named
   : tailscaleHost
     ? `https://${tailscaleHost}`
     : await new Promise((resolve, reject) => {
-      const deadline = Date.now() + 60_000;
-      const poll = () => {
-        const logs = execFileSync('docker', [...compose, 'logs', '--no-color', 'tunnel'], {
-          env: composeEnv,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        const m = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-        if (m) return resolve(m[0]);
-        if (Date.now() > deadline) return reject(new Error('Timed out waiting for tunnel URL'));
-        setTimeout(poll, 1000);
-      };
-      poll();
-    }).catch((e) => {
-      console.error(e.message);
-      shutdown(1);
-    });
+        const deadline = Date.now() + 60_000;
+        const poll = () => {
+          const logs = execFileSync('docker', [...compose, 'logs', '--no-color', 'tunnel'], {
+            env: composeEnv,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          const m = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+          if (m) return resolve(m[0]);
+          if (Date.now() > deadline) return reject(new Error('Timed out waiting for tunnel URL'));
+          setTimeout(poll, 1000);
+        };
+        poll();
+      }).catch((e) => {
+        console.error(e.message);
+        shutdown(1);
+      });
 
 const dynamoEnv = { DYNAMODB_ENDPOINT: 'http://localhost:8000', DYNAMODB_REGION: 'us-east-1' };
 const childEnv = { ...process.env, ...dynamoEnv, RELAY_BASE_URL: tunnelUrl, PORT: relayPort };
@@ -146,7 +159,9 @@ run('node', ['scripts/setup-local-dynamodb.js'], { cwd: relayDir, env: childEnv 
 
 // 5. Relay (logs to file so the TUI owns the terminal)
 if (await isHttpUp(`http://localhost:${relayPort}/`)) {
-  console.error(`Port ${relayPort} is already in use (leftover relay?). Stop it and retry: lsof -ti tcp:${relayPort} | xargs kill`);
+  console.error(
+    `Port ${relayPort} is already in use (leftover relay?). Stop it and retry: lsof -ti tcp:${relayPort} | xargs kill`,
+  );
   shutdown(1);
 }
 const relay = startService({
@@ -164,7 +179,13 @@ const relay = startService({
 children.push(relay);
 
 console.log('Waiting for relay...');
-if (!(await waitForHttp(`http://localhost:${relayPort}/`, { timeoutMs: 60_000, intervalMs: 1000, isAlive: () => !stopping }))) {
+if (
+  !(await waitForHttp(`http://localhost:${relayPort}/`, {
+    timeoutMs: 60_000,
+    intervalMs: 1000,
+    isAlive: () => !stopping,
+  }))
+) {
   console.error('Relay did not start; see logs/relay.log');
   shutdown(1);
 }
@@ -181,12 +202,24 @@ const dispatcherEnvFile = join(dispatcherDir, '.env.local');
 const dispatcherPort = readEnv(dispatcherEnvFile).PORT || '3000';
 const saved = readEnv(dispatcherEnvFile);
 // Reconnect if never connected, if the saved relay URL is stale (e.g. old ngrok/tunnel), or on --reconnect.
-if (!saved.RELAY_SUBSCRIBER_SECRET || saved.RELAY_URL !== tunnelUrl || process.argv.includes('--reconnect')) {
+if (
+  !saved.RELAY_SUBSCRIBER_SECRET ||
+  saved.RELAY_URL !== tunnelUrl ||
+  process.argv.includes('--reconnect')
+) {
   console.log('Connecting dispatcher to relay - authorize in the browser...');
-  run('pnpm', ['connect-relay', `--relay-url=${tunnelUrl}`, `--local-endpoint=http://localhost:${dispatcherPort}`], {
-    cwd: dispatcherDir,
-    env: childEnv,
-  });
+  run(
+    'pnpm',
+    [
+      'connect-relay',
+      `--relay-url=${tunnelUrl}`,
+      `--local-endpoint=http://localhost:${dispatcherPort}`,
+    ],
+    {
+      cwd: dispatcherDir,
+      env: childEnv,
+    },
+  );
 }
 
 // 7. Dispatcher + monitor TUI (monitor.js boots the server with logs in a file)

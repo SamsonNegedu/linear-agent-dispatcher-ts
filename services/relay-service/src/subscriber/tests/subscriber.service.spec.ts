@@ -71,7 +71,13 @@ describe('SubscriberService', () => {
   it('re-registering the same team/user pair with a new endpoint upserts the same subscriber id', async () => {
     registry.upsertSubscriber.mockResolvedValue(makeSubscriber());
 
-    await service.registerSubscriber('ENG:user_1', 'ENG', 'user_1', 'http://new-tunnel:5000/webhook', 'secret');
+    await service.registerSubscriber(
+      'ENG:user_1',
+      'ENG',
+      'user_1',
+      'http://new-tunnel:5000/webhook',
+      'secret',
+    );
 
     expect(registry.upsertSubscriber).toHaveBeenCalledWith(
       expect.objectContaining({ subscriberId: buildSubscriberId('ENG', 'user_1') }),

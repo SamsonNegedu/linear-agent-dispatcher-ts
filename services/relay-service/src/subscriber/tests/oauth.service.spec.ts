@@ -18,7 +18,9 @@ describe('OAuthService', () => {
   });
 
   it('builds the authorization URL against the callback derived from the relay base URL', async () => {
-    const generateAuthorizationUrl = jest.fn().mockReturnValue('https://linear.app/oauth/authorize?state=abc');
+    const generateAuthorizationUrl = jest
+      .fn()
+      .mockReturnValue('https://linear.app/oauth/authorize?state=abc');
     MockedOAuthClient.mockImplementation(
       () => ({ generateAuthorizationUrl }) as unknown as LinearOAuthClient,
     );
@@ -48,7 +50,9 @@ describe('OAuthService', () => {
 
   it('fetches user info via the Linear GraphQL client', async () => {
     const getUserInfo = jest.fn().mockResolvedValue({ id: 'user_1', teams: [] });
-    MockedGraphQLClient.mockImplementation(() => ({ getUserInfo }) as unknown as LinearGraphQLClient);
+    MockedGraphQLClient.mockImplementation(
+      () => ({ getUserInfo }) as unknown as LinearGraphQLClient,
+    );
 
     const service = await buildService();
     const info = await service.getUserInfo('access_token_1');

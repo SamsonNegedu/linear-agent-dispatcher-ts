@@ -45,7 +45,11 @@ export class LinearOAuthClient {
    * Validate signed state and extract endpoint (and optional CLI callback URL + relay base URL)
    * Throws error if state is invalid, forged, or expired
    */
-  validateSignedState(state: string): { endpoint: string; cliCallbackUrl?: string; relayBaseUrl?: string } {
+  validateSignedState(state: string): {
+    endpoint: string;
+    cliCallbackUrl?: string;
+    relayBaseUrl?: string;
+  } {
     const stateData = this.parseSignedState(state);
     if (!stateData) {
       throw new Error('Invalid or tampered state parameter');
@@ -69,7 +73,11 @@ export class LinearOAuthClient {
       throw new Error('State parameter expired');
     }
 
-    return { endpoint: stateData.endpoint, cliCallbackUrl: stateData.cliCallbackUrl, relayBaseUrl: stateData.relayBaseUrl };
+    return {
+      endpoint: stateData.endpoint,
+      cliCallbackUrl: stateData.cliCallbackUrl,
+      relayBaseUrl: stateData.relayBaseUrl,
+    };
   }
 
   /**
@@ -103,18 +111,26 @@ export class LinearOAuthClient {
     return response.json() as Promise<LinearTokenResponse>;
   }
 
-  private generateSignedState(endpoint: string, cliCallbackUrl?: string, relayBaseUrl?: string): string {
+  private generateSignedState(
+    endpoint: string,
+    cliCallbackUrl?: string,
+    relayBaseUrl?: string,
+  ): string {
     const nonce = crypto.randomBytes(16).toString('hex');
     const timestamp = Date.now();
-    const signature = this.computeStateSignature(endpoint, nonce, timestamp, cliCallbackUrl, relayBaseUrl);
+    const signature = this.computeStateSignature(
+      endpoint,
+      nonce,
+      timestamp,
+      cliCallbackUrl,
+      relayBaseUrl,
+    );
 
     const stateObj = { endpoint, nonce, timestamp, signature, cliCallbackUrl, relayBaseUrl };
     return Buffer.from(JSON.stringify(stateObj)).toString('base64');
   }
 
-  private parseSignedState(
-    state: string,
-  ): {
+  private parseSignedState(state: string): {
     endpoint: string;
     nonce: string;
     timestamp: number;

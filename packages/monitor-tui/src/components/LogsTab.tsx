@@ -39,7 +39,9 @@ export function LogsTab(): React.ReactNode {
           stickyScroll
           stickyStart="bottom"
         >
-          {lines.map((line, i) => <text key={i}>{line || ' '}</text>)}
+          {lines.map((line, i) => (
+            <text key={i}>{line || ' '}</text>
+          ))}
         </scrollbox>
       )}
     </box>

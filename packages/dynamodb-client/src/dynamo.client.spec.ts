@@ -1,7 +1,10 @@
 import { BatchWriteCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { DynamoClient } from './dynamo.client';
 
-type Send = jest.Mock<Promise<unknown>, [{ constructor: { name: string }; input: Record<string, unknown> }]>;
+type Send = jest.Mock<
+  Promise<unknown>,
+  [{ constructor: { name: string }; input: Record<string, unknown> }]
+>;
 
 function makeClient(): { client: DynamoClient; send: Send } {
   const client = new DynamoClient();
@@ -30,7 +33,10 @@ describe('DynamoClient', () => {
       await client.batchGetItems('T', keys(250));
 
       expect(send).toHaveBeenCalledTimes(3);
-      const sizes = send.mock.calls.map(([cmd]) => (cmd.input as { RequestItems: { T: { Keys: unknown[] } } }).RequestItems.T.Keys.length);
+      const sizes = send.mock.calls.map(
+        ([cmd]) =>
+          (cmd.input as { RequestItems: { T: { Keys: unknown[] } } }).RequestItems.T.Keys.length,
+      );
       expect(sizes).toEqual([100, 100, 50]);
     });
 
@@ -54,9 +60,14 @@ describe('DynamoClient', () => {
 
     it('throws when keys are still unprocessed after all retries', async () => {
       const { client, send } = makeClient();
-      send.mockResolvedValue({ Responses: { T: [] }, UnprocessedKeys: { T: { Keys: [{ pKey: 'p', sKey: 's' }] } } });
+      send.mockResolvedValue({
+        Responses: { T: [] },
+        UnprocessedKeys: { T: { Keys: [{ pKey: 'p', sKey: 's' }] } },
+      });
 
-      await expect(client.batchGetItems('T', keys(1))).rejects.toThrow(/BatchGetItems.*unprocessed/);
+      await expect(client.batchGetItems('T', keys(1))).rejects.toThrow(
+        /BatchGetItems.*unprocessed/,
+      );
       expect(send).toHaveBeenCalledTimes(5);
     });
   });
@@ -75,19 +86,27 @@ describe('DynamoClient', () => {
     it('retries unprocessed delete requests', async () => {
       const { client, send } = makeClient();
       const unprocessed = { T: [{ DeleteRequest: { Key: { pKey: 'p0', sKey: 's' } } }] };
-      send.mockResolvedValueOnce({ UnprocessedItems: unprocessed }).mockResolvedValueOnce({ UnprocessedItems: {} });
+      send
+        .mockResolvedValueOnce({ UnprocessedItems: unprocessed })
+        .mockResolvedValueOnce({ UnprocessedItems: {} });
 
       await client.batchDeleteItems('T', keys(1));
 
       expect(send).toHaveBeenCalledTimes(2);
-      expect((send.mock.calls[1][0].input as { RequestItems: unknown }).RequestItems).toEqual(unprocessed);
+      expect((send.mock.calls[1][0].input as { RequestItems: unknown }).RequestItems).toEqual(
+        unprocessed,
+      );
     });
 
     it('throws after exhausting retries', async () => {
       const { client, send } = makeClient();
-      send.mockResolvedValue({ UnprocessedItems: { T: [{ PutRequest: { Item: { pKey: 'p' } } }] } });
+      send.mockResolvedValue({
+        UnprocessedItems: { T: [{ PutRequest: { Item: { pKey: 'p' } } }] },
+      });
 
-      await expect(client.batchWriteItems('T', [{ pKey: 'p' }])).rejects.toThrow(/BatchWriteItems.*unprocessed/);
+      await expect(client.batchWriteItems('T', [{ pKey: 'p' }])).rejects.toThrow(
+        /BatchWriteItems.*unprocessed/,
+      );
     });
 
     it('sends nothing for an empty list', async () => {
@@ -112,7 +131,9 @@ describe('DynamoClient', () => {
 
       expect(items).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
       expect(send.mock.calls.every(([cmd]) => cmd instanceof QueryCommand)).toBe(true);
-      expect((send.mock.calls[2][0].input as { ExclusiveStartKey: unknown }).ExclusiveStartKey).toEqual({ pKey: 'b' });
+      expect(
+        (send.mock.calls[2][0].input as { ExclusiveStartKey: unknown }).ExclusiveStartKey,
+      ).toEqual({ pKey: 'b' });
     });
 
     it('treats a page without Items as empty', async () => {

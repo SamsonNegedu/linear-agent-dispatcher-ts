@@ -5,7 +5,9 @@ import { ConfigModule } from '../../config/config.module';
 import { FakeDynamoDBModule } from '../../test-utils/fake-dynamodb.module';
 import type { RelayServiceConfig } from '../../config/relay-config';
 
-export function makeRelayServiceConfig(overrides: Partial<RelayServiceConfig> = {}): RelayServiceConfig {
+export function makeRelayServiceConfig(
+  overrides: Partial<RelayServiceConfig> = {},
+): RelayServiceConfig {
   return {
     linear: {
       oauthClientId: 'client_1',
@@ -24,7 +26,9 @@ export function makeRelayServiceConfig(overrides: Partial<RelayServiceConfig> = 
  * test cares about. This baseline keeps that safe: no real AWS call, no
  * throw on a missing env-derived config value.
  */
-export function baseSubscriberModuleTestBuilder(configOverrides: Partial<RelayServiceConfig> = {}): TestingModuleBuilder {
+export function baseSubscriberModuleTestBuilder(
+  configOverrides: Partial<RelayServiceConfig> = {},
+): TestingModuleBuilder {
   return Test.createTestingModule({ imports: [SubscriberModule, ConfigModule] })
     .overrideModule(DynamoDBModule)
     .useModule(FakeDynamoDBModule)

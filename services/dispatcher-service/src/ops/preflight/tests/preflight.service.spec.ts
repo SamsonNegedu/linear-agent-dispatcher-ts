@@ -45,7 +45,9 @@ async function buildService(
   configOverrides: Partial<DispatcherConfig>,
   routingConfig: jest.Mocked<RoutingConfigService>,
 ): Promise<PreflightService> {
-  const module = await Test.createTestingModule({ imports: [PreflightModule, DispatcherConfigModule] })
+  const module = await Test.createTestingModule({
+    imports: [PreflightModule, DispatcherConfigModule],
+  })
     .overrideProvider('DispatcherConfig')
     .useValue(makeConfig(configOverrides))
     .overrideProvider(RoutingConfigService)
@@ -72,7 +74,11 @@ describe('PreflightService', () => {
     succeedExecFile();
     mockExistsSync.mockReturnValue(true);
     const routingConfig = makeRoutingConfig([
-      { label: 'repo-a', path: '/repos/repo-a', issueLabelToSkill: { 'agent-implement': 'implement' } },
+      {
+        label: 'repo-a',
+        path: '/repos/repo-a',
+        issueLabelToSkill: { 'agent-implement': 'implement' },
+      },
     ]);
     const service = await buildService({}, routingConfig);
 
@@ -112,7 +118,11 @@ describe('PreflightService', () => {
     succeedExecFile();
     mockExistsSync.mockImplementation((p: string) => !p.includes('.claude'));
     const routingConfig = makeRoutingConfig([
-      { label: 'repo-a', path: '/repos/repo-a', issueLabelToSkill: { 'agent-implement': 'implement' } },
+      {
+        label: 'repo-a',
+        path: '/repos/repo-a',
+        issueLabelToSkill: { 'agent-implement': 'implement' },
+      },
     ]);
     const service = await buildService({}, routingConfig);
 
@@ -122,7 +132,10 @@ describe('PreflightService', () => {
   it('throws when a repo exposes no skills', async () => {
     succeedExecFile();
     mockExistsSync.mockReturnValue(true);
-    const service = await buildService({}, makeRoutingConfig([{ label: 'repo-a', path: '/repos/repo-a' }]));
+    const service = await buildService(
+      {},
+      makeRoutingConfig([{ label: 'repo-a', path: '/repos/repo-a' }]),
+    );
 
     await expect(service.onModuleInit()).rejects.toThrow('Preflight validation failed');
   });

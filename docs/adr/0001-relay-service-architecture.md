@@ -43,7 +43,7 @@ records would suggest they were each weighed independently; they weren't.
   instance regardless of traffic, to store what amounts to a few KB of
   subscriber state and some delivery logs
 - Native TTL support: used for `WebhookDeliveries` (30-day auto-expiry, real
-  and implemented). *Not* used for `SubscriberRegistry` — no `expiresAt`
+  and implemented). _Not_ used for `SubscriberRegistry` — no `expiresAt`
   field exists; the duplicate-subscriber problem this might have papered
   over was instead fixed at the identity layer, see
   [ADR 0005](0005-deterministic-subscriber-identity.md)
@@ -86,14 +86,14 @@ records would suggest they were each weighed independently; they weren't.
 
 ## Alternatives Considered
 
-| Approach | Rejected because |
-|---|---|
-| Decentralized (each dispatcher does its own OAuth with Linear) | N OAuth apps, credential sprawl, no central delivery visibility |
-| Relay embedded in each dispatcher's environment | Defeats the purpose — relay would need to scale per-team instead of once |
-| Event bus (SNS/SQS) between relay and dispatchers | Added latency and infrastructure for guarantees this workload doesn't need; still needs an OAuth gateway regardless |
-| EC2/ECS/App Runner instead of Lambda | Pay for always-on capacity at near-zero traffic; more ops for no benefit at this scale |
-| RDS instead of DynamoDB | Same always-on cost problem, for data that doesn't need relational queries |
-| Express instead of NestJS on Fastify | Manual error handling/validation/logging boilerplate NestJS gives for free; Fastify chosen over Express specifically for the Lambda adapter, see Decision above |
+| Approach                                                       | Rejected because                                                                                                                                                |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decentralized (each dispatcher does its own OAuth with Linear) | N OAuth apps, credential sprawl, no central delivery visibility                                                                                                 |
+| Relay embedded in each dispatcher's environment                | Defeats the purpose — relay would need to scale per-team instead of once                                                                                        |
+| Event bus (SNS/SQS) between relay and dispatchers              | Added latency and infrastructure for guarantees this workload doesn't need; still needs an OAuth gateway regardless                                             |
+| EC2/ECS/App Runner instead of Lambda                           | Pay for always-on capacity at near-zero traffic; more ops for no benefit at this scale                                                                          |
+| RDS instead of DynamoDB                                        | Same always-on cost problem, for data that doesn't need relational queries                                                                                      |
+| Express instead of NestJS on Fastify                           | Manual error handling/validation/logging boilerplate NestJS gives for free; Fastify chosen over Express specifically for the Lambda adapter, see Decision above |
 
 ## Implementation Notes
 

@@ -55,7 +55,10 @@ export class LinearDispatchAdapter implements DispatchAdapter {
     }
 
     if (this.routingConfig.getPolicy().skipDoneIssues && event.isTerminal) {
-      return { shouldDispatch: false, reason: 'issue state is terminal and policy.skipDoneIssues is enabled' };
+      return {
+        shouldDispatch: false,
+        reason: 'issue state is terminal and policy.skipDoneIssues is enabled',
+      };
     }
 
     if (event.action === 'create') {
@@ -144,9 +147,12 @@ export class LinearDispatchAdapter implements DispatchAdapter {
     }
   }
 
-  private validateAndResolveDomainLabel(
-    labels: string[],
-  ): { repoLabel?: string; repoPath?: string; error?: string; incomplete?: boolean } {
+  private validateAndResolveDomainLabel(labels: string[]): {
+    repoLabel?: string;
+    repoPath?: string;
+    error?: string;
+    incomplete?: boolean;
+  } {
     const validDomainLabels = this.routingConfig.getRepositoryLabels();
     const matchingDomainLabels = labels.filter((label) => validDomainLabels.includes(label));
 

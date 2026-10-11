@@ -91,7 +91,10 @@ describe('DispatcherService.dispatchWebhook', () => {
   });
 
   it('enqueues a run and executes it when the adapter approves dispatch', async () => {
-    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'issue created' });
+    dispatchAdapter.shouldDispatch.mockReturnValue({
+      shouldDispatch: true,
+      reason: 'issue created',
+    });
     issueContextResolver.resolveIssueContext.mockResolvedValue({
       labels: ['repo-a', 'agent-implement'],
       identifier: 'ISSUE-1',
@@ -133,7 +136,10 @@ describe('DispatcherService.dispatchWebhook', () => {
   });
 
   it('silently skips when routing is incomplete (labels not yet set)', async () => {
-    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'issue created' });
+    dispatchAdapter.shouldDispatch.mockReturnValue({
+      shouldDispatch: true,
+      reason: 'issue created',
+    });
     issueContextResolver.resolveIssueContext.mockResolvedValue({ labels: [] });
     dispatchAdapter.resolveRouting.mockImplementation(() => {
       throw new IncompleteLabelsError('missing domain label');
@@ -146,7 +152,10 @@ describe('DispatcherService.dispatchWebhook', () => {
   });
 
   it('posts feedback and rethrows on a validation error (e.g. conflicting labels)', async () => {
-    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'issue created' });
+    dispatchAdapter.shouldDispatch.mockReturnValue({
+      shouldDispatch: true,
+      reason: 'issue created',
+    });
     issueContextResolver.resolveIssueContext.mockResolvedValue({ labels: ['repo-a', 'repo-b'] });
     dispatchAdapter.resolveRouting.mockImplementation(() => {
       throw new ValidationError('multiple domain labels found');
@@ -156,12 +165,20 @@ describe('DispatcherService.dispatchWebhook', () => {
     await expect(service.dispatchWebhook(event)).rejects.toThrow(ValidationError);
 
     expect(store.enqueueRun).not.toHaveBeenCalled();
-    expect(dispatchAdapter.postFeedback).toHaveBeenCalledWith(event, 'multiple domain labels found');
+    expect(dispatchAdapter.postFeedback).toHaveBeenCalledWith(
+      event,
+      'multiple domain labels found',
+    );
   });
 
   it('rethrows a duplicate payload error without posting feedback (already processed)', async () => {
-    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'issue created' });
-    issueContextResolver.resolveIssueContext.mockResolvedValue({ labels: ['repo-a', 'agent-implement'] });
+    dispatchAdapter.shouldDispatch.mockReturnValue({
+      shouldDispatch: true,
+      reason: 'issue created',
+    });
+    issueContextResolver.resolveIssueContext.mockResolvedValue({
+      labels: ['repo-a', 'agent-implement'],
+    });
     dispatchAdapter.resolveRouting.mockReturnValue({
       repoLabel: 'repo-a',
       repoPath: '/repos/repo-a',
@@ -176,8 +193,13 @@ describe('DispatcherService.dispatchWebhook', () => {
   });
 
   it('posts feedback and rethrows when the store rejects the run as an active-run conflict', async () => {
-    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'issue created' });
-    issueContextResolver.resolveIssueContext.mockResolvedValue({ labels: ['repo-a', 'agent-implement'] });
+    dispatchAdapter.shouldDispatch.mockReturnValue({
+      shouldDispatch: true,
+      reason: 'issue created',
+    });
+    issueContextResolver.resolveIssueContext.mockResolvedValue({
+      labels: ['repo-a', 'agent-implement'],
+    });
     dispatchAdapter.resolveRouting.mockReturnValue({
       repoLabel: 'repo-a',
       repoPath: '/repos/repo-a',
@@ -196,7 +218,10 @@ describe('DispatcherService.dispatchWebhook', () => {
   });
 
   it('posts feedback and rethrows on an unexpected error', async () => {
-    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'issue created' });
+    dispatchAdapter.shouldDispatch.mockReturnValue({
+      shouldDispatch: true,
+      reason: 'issue created',
+    });
     issueContextResolver.resolveIssueContext.mockRejectedValue(new Error('GraphQL request failed'));
 
     const event = makeEvent();

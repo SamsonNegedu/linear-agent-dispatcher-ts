@@ -63,5 +63,7 @@ export interface IStoreRepository {
   completeRun(id: string, out: CompleteRunInput): Promise<void>;
   reconcileStaleRuns(olderThanMs: number): Promise<void>;
   ping(): Promise<void>;
-  getRunStats(sinceMs: number): Promise<{ lastWebhookAt: Date | null; byStatus: Record<Run['status'], number> }>;
+  getRunStats(
+    sinceMs: number,
+  ): Promise<{ lastWebhookAt: Date | null; byStatus: Record<Run['status'], number> }>;
 }

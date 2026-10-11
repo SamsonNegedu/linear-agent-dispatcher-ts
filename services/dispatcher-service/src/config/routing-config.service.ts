@@ -177,11 +177,15 @@ export class RoutingConfigService {
     if (!parsed.success) {
       const duplicate = parsed.error.issues.find((i) => i.message.startsWith('Duplicate'));
       throw new Error(
-        duplicate ? duplicate.message : `Invalid routing.config.json:\n${formatSchemaIssues(parsed.error)}`,
+        duplicate
+          ? duplicate.message
+          : `Invalid routing.config.json:\n${formatSchemaIssues(parsed.error)}`,
       );
     }
 
-    this.logger.log(`Loaded ${parsed.data.repositories.length} repositories from routing.config.json`);
+    this.logger.log(
+      `Loaded ${parsed.data.repositories.length} repositories from routing.config.json`,
+    );
     return parsed.data;
   }
 }

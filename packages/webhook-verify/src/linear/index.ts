@@ -232,7 +232,6 @@ const parseAgentSessionWebhook = (data: Record<string, unknown>): VerifiedEvent 
   };
 };
 
-
 // Linear's state.type enum: 'triage' | 'backlog' | 'unstarted' | 'started' |
 // 'completed' | 'canceled'. "Terminal" means the issue is done, one way or
 // another — not the display name, which workspaces can rename freely.

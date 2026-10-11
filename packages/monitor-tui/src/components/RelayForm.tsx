@@ -50,7 +50,15 @@ export function RelayForm({
   };
 
   return (
-    <box style={{ border: true, borderColor: colors.accent, flexDirection: 'column', flexGrow: 1, padding: 1 }}>
+    <box
+      style={{
+        border: true,
+        borderColor: colors.accent,
+        flexDirection: 'column',
+        flexGrow: 1,
+        padding: 1,
+      }}
+    >
       <text attributes={1}>{title}</text>
       <text fg={colors.muted}>(Esc to cancel)</text>
       <text> </text>
@@ -64,7 +72,14 @@ export function RelayForm({
           {i === stepIndex ? (
             <box style={{ flexDirection: 'column' }}>
               <text fg={colors.accent}>{f.label}</text>
-              <box style={{ border: true, borderColor: colors.accent, flexDirection: 'row', flexGrow: 1 }}>
+              <box
+                style={{
+                  border: true,
+                  borderColor: colors.accent,
+                  flexDirection: 'row',
+                  flexGrow: 1,
+                }}
+              >
                 <input
                   value={current}
                   focused

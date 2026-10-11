@@ -25,7 +25,7 @@ comments claimed:
   policy rejections — were logged identically to genuine unexpected bugs
   (`[NEEDS_ATTENTION]`), which would pollute any log-based alerting.
 - The webhook queue processor stopped processing entirely after the first
-  failure in a batch, stalling every *other*, unrelated queued webhook until
+  failure in a batch, stalling every _other_, unrelated queued webhook until
   a fresh delivery happened to arrive and restart it.
 - The Claude child process only ever received `SIGTERM` on timeout, with no
   escalation — a process that ignored or outlived `SIGTERM` could hang
@@ -142,11 +142,11 @@ it. The duplicate-run window applies as usual.
 
 ## Alternatives Considered
 
-| Approach | Rejected because |
-|---|---|
-| A per-issue same-day run cap, in addition to the below | Redundant — `duplicateRunWindowMs` plus the one-active-run-per-issue check already prevent the failure mode a cap would catch, with no clear gap left for a count-based limit to fill |
-| Retry failed webhook deliveries with backoff | Most failure causes here are not transient (validation errors, policy rejections, real bugs) — blind retry wouldn't help and would duplicate the feedback already posted to Linear on first failure |
-| Kill only the direct child process on timeout, not the process group | Wouldn't reach subprocesses Claude itself spawns, which is the actual risk a timeout needs to cover |
+| Approach                                                             | Rejected because                                                                                                                                                                                    |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A per-issue same-day run cap, in addition to the below               | Redundant — `duplicateRunWindowMs` plus the one-active-run-per-issue check already prevent the failure mode a cap would catch, with no clear gap left for a count-based limit to fill               |
+| Retry failed webhook deliveries with backoff                         | Most failure causes here are not transient (validation errors, policy rejections, real bugs) — blind retry wouldn't help and would duplicate the feedback already posted to Linear on first failure |
+| Kill only the direct child process on timeout, not the process group | Wouldn't reach subprocesses Claude itself spawns, which is the actual risk a timeout needs to cover                                                                                                 |
 
 ## References
 

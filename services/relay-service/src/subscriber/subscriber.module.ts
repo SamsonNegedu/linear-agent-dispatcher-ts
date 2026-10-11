@@ -4,7 +4,10 @@ import { SubscriberController } from './subscriber.controller';
 import { OAuthCallbackController } from './oauth-callback.controller';
 import { SubscriberService } from './subscriber.service';
 import { OAuthService } from './oauth.service';
-import { subscriberRegistryProvider, SUBSCRIBER_REGISTRY_REPOSITORY } from './subscriber-registry.provider';
+import {
+  subscriberRegistryProvider,
+  SUBSCRIBER_REGISTRY_REPOSITORY,
+} from './subscriber-registry.provider';
 
 @Module({
   imports: [DynamoDBModule],

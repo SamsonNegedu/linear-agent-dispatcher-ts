@@ -28,7 +28,9 @@ export function makeDispatcherConfig(overrides: Partial<DispatcherConfig> = {}):
  * RelayModule-based test needs so nothing tries a real DB connection or a
  * real routing.config.json read.
  */
-export function baseRelayModuleTestBuilder(configOverrides: Partial<DispatcherConfig> = {}): TestingModuleBuilder {
+export function baseRelayModuleTestBuilder(
+  configOverrides: Partial<DispatcherConfig> = {},
+): TestingModuleBuilder {
   return Test.createTestingModule({ imports: [RelayModule, DispatcherConfigModule] })
     .overrideModule(StoreModule)
     .useModule(FakeStoreModule)

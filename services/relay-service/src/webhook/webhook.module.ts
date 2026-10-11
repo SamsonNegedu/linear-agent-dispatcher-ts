@@ -7,7 +7,10 @@ import { LinearGraphQLClient } from '@linear-agent/linear-client';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
-import { webhookDeliveriesProvider, WEBHOOK_DELIVERIES_REPOSITORY } from './webhook-deliveries.provider';
+import {
+  webhookDeliveriesProvider,
+  WEBHOOK_DELIVERIES_REPOSITORY,
+} from './webhook-deliveries.provider';
 import { SubscriberModule } from '../subscriber/subscriber.module';
 import { LinearRoutingResolver } from './linear-routing.resolver';
 import { NullRoutingResolver } from './null-routing.resolver';

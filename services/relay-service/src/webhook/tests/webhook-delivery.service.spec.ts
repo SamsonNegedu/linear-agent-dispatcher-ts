@@ -38,6 +38,11 @@ describe('WebhookDeliveryService', () => {
   it('logs a delivery result', async () => {
     await service.logResult('delivery_1', 'success', 120);
 
-    expect(deliveries.logDeliveryResult).toHaveBeenCalledWith('delivery_1', 'success', 120, undefined);
+    expect(deliveries.logDeliveryResult).toHaveBeenCalledWith(
+      'delivery_1',
+      'success',
+      120,
+      undefined,
+    );
   });
 });

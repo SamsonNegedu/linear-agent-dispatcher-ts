@@ -78,7 +78,9 @@ describe('RoutingConfigService', () => {
     });
 
     it('maps agent-<name> to /<name> for top-level skills in every repo', () => {
-      setConfigFile(JSON.stringify({ skills: ['implement', 'plan'], repositories: ['/repos/a', '/repos/b'] }));
+      setConfigFile(
+        JSON.stringify({ skills: ['implement', 'plan'], repositories: ['/repos/a', '/repos/b'] }),
+      );
 
       const service = new RoutingConfigService();
 
@@ -86,7 +88,7 @@ describe('RoutingConfigService', () => {
       expect(service.getSkillForMode('b', 'agent-implement')).toBe('implement');
     });
 
-    it('adds a repo\'s own skills on top of the top-level ones, only for that repo', () => {
+    it("adds a repo's own skills on top of the top-level ones, only for that repo", () => {
       setConfigFile(
         JSON.stringify({
           skills: ['implement'],
@@ -104,7 +106,12 @@ describe('RoutingConfigService', () => {
       setConfigFile(
         JSON.stringify({
           skills: ['implement'],
-          repositories: [{ path: '/repos/a', issueLabelToSkill: { 'agent-implement': 'build', 'agent-review': 'code-review' } }],
+          repositories: [
+            {
+              path: '/repos/a',
+              issueLabelToSkill: { 'agent-implement': 'build', 'agent-review': 'code-review' },
+            },
+          ],
         }),
       );
 
@@ -123,11 +130,27 @@ describe('RoutingConfigService', () => {
 
   describe('schema validation', () => {
     it.each([
-      ['an unknown top-level key', { repositorys: [], repositories: [{ label: 'a', path: '/a' }] }, /repositorys/],
-      ['an invalid repo label', { repositories: [{ label: 'my repo', path: '/a' }] }, /repositories\.0\.label/],
-      ['an invalid issue label', { repositories: [{ label: 'a', path: '/a', issueLabelToSkill: { 'bad label': 'x' } }] }, /issueLabelToSkill/],
+      [
+        'an unknown top-level key',
+        { repositorys: [], repositories: [{ label: 'a', path: '/a' }] },
+        /repositorys/,
+      ],
+      [
+        'an invalid repo label',
+        { repositories: [{ label: 'my repo', path: '/a' }] },
+        /repositories\.0\.label/,
+      ],
+      [
+        'an invalid issue label',
+        { repositories: [{ label: 'a', path: '/a', issueLabelToSkill: { 'bad label': 'x' } }] },
+        /issueLabelToSkill/,
+      ],
       ['an empty repositories array', { repositories: [] }, /at least one repository/],
-      ['a negative duplicate window', { policy: { duplicateRunWindowMs: -1 }, repositories: [{ label: 'a', path: '/a' }] }, /duplicateRunWindowMs/],
+      [
+        'a negative duplicate window',
+        { policy: { duplicateRunWindowMs: -1 }, repositories: [{ label: 'a', path: '/a' }] },
+        /duplicateRunWindowMs/,
+      ],
     ])('rejects %s', (_name, config, message) => {
       setConfigFile(JSON.stringify(config));
 

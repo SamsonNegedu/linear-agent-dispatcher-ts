@@ -41,10 +41,7 @@ With neither, it falls back to a random quick-tunnel URL.
 ```json
 {
   "skills": ["implement", "fix-bug"],
-  "repositories": [
-    "~/code/api",
-    { "path": "~/code/web", "skills": ["design-review"] }
-  ]
+  "repositories": ["~/code/api", { "path": "~/code/web", "skills": ["design-review"] }]
 }
 ```
 
@@ -64,13 +61,13 @@ On a Linear issue, set the repo's label (e.g. `api`) plus one mode label (e.g. `
 
 Tabs: Dashboard (repos and each label's skill, ✓/✗), Logs, Relay, Runs, **Needs input**, Completed, Failed. The header shows live counts and relay status.
 
-| Key | Action |
-|-----|--------|
-| `↑↓` / `1`–`7` | Switch tab |
-| `y` | Copy the selection, or the whole tab, to the clipboard |
-| `m` | Toggle mouse capture (off: select text with the mouse and Cmd+C; on: wheel scroll) |
-| `Ctrl+R` | Restart the dispatcher server in place; the TUI stays up |
-| `q` / `Ctrl+C` | Quit and stop everything |
+| Key            | Action                                                                             |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `↑↓` / `1`–`7` | Switch tab                                                                         |
+| `y`            | Copy the selection, or the whole tab, to the clipboard                             |
+| `m`            | Toggle mouse capture (off: select text with the mouse and Cmd+C; on: wheel scroll) |
+| `Ctrl+R`       | Restart the dispatcher server in place; the TUI stays up                           |
+| `q` / `Ctrl+C` | Quit and stop everything                                                           |
 
 ## 5. Check it works
 

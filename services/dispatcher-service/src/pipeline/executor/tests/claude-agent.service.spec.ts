@@ -23,7 +23,12 @@ function makeConfig(overrides: Partial<DispatcherConfig['executor']> = {}): Disp
   return {
     relay: { enabled: false },
     server: { port: 3000, globalPrefix: '' },
-    executor: { claudeBinPath: 'claude', allowedEnvVars: ['PATH'], timeout: 1_800_000, ...overrides },
+    executor: {
+      claudeBinPath: 'claude',
+      allowedEnvVars: ['PATH'],
+      timeout: 1_800_000,
+      ...overrides,
+    },
     database: { path: './data/dispatcher.db', synchronize: true, logging: false },
     linear: {},
     preflight: { skip: false },
@@ -32,8 +37,12 @@ function makeConfig(overrides: Partial<DispatcherConfig['executor']> = {}): Disp
 
 const mcpAllowRules = jest.fn<Promise<string[]>, [string]>();
 
-async function buildService(overrides: Partial<DispatcherConfig['executor']> = {}): Promise<ClaudeAgentService> {
-  const module = await Test.createTestingModule({ imports: [ExecutorModule, DispatcherConfigModule] })
+async function buildService(
+  overrides: Partial<DispatcherConfig['executor']> = {},
+): Promise<ClaudeAgentService> {
+  const module = await Test.createTestingModule({
+    imports: [ExecutorModule, DispatcherConfigModule],
+  })
     .overrideModule(StoreModule)
     .useModule(FakeStoreModule)
     .overrideProvider('DispatcherConfig')
@@ -66,7 +75,9 @@ describe('ClaudeAgentService.spawn', () => {
 
     child.stdout.emit(
       'data',
-      Buffer.from(JSON.stringify({ session_id: 'sess_1', result: 'did the thing', total_cost_usd: 0.5 })),
+      Buffer.from(
+        JSON.stringify({ session_id: 'sess_1', result: 'did the thing', total_cost_usd: 0.5 }),
+      ),
     );
     child.emit('close', 0);
 
@@ -109,7 +120,9 @@ describe('ClaudeAgentService.spawn', () => {
     await jest.advanceTimersByTimeAsync(0);
 
     expect(mcpAllowRules).toHaveBeenCalledWith('/repos/repo-a');
-    expect(mockSpawn.mock.calls[0][1]).toContain('Read,mcp__linear-server,mcp__plugin_playwright_playwright');
+    expect(mockSpawn.mock.calls[0][1]).toContain(
+      'Read,mcp__linear-server,mcp__plugin_playwright_playwright',
+    );
 
     child.emit('close', 0);
     await resultPromise;
@@ -131,7 +144,12 @@ describe('ClaudeAgentService.spawn', () => {
     const resultPromise = service.spawn('implement', 'ISSUE-1', '/repos/repo-a');
     await Promise.resolve();
 
-    expect(mockSpawn.mock.calls[0][1]).toEqual(['-p', '/implement ISSUE-1', '--output-format', 'json']);
+    expect(mockSpawn.mock.calls[0][1]).toEqual([
+      '-p',
+      '/implement ISSUE-1',
+      '--output-format',
+      'json',
+    ]);
 
     child.emit('close', 0);
     await resultPromise;
@@ -162,7 +180,11 @@ describe('ClaudeAgentService.spawn', () => {
     child.emit('close', 1);
 
     await expect(resultPromise).resolves.toEqual(
-      expect.objectContaining({ status: 'failed', exitCode: 1, errorSnippet: 'fatal: something broke' }),
+      expect.objectContaining({
+        status: 'failed',
+        exitCode: 1,
+        errorSnippet: 'fatal: something broke',
+      }),
     );
   });
 
@@ -172,7 +194,13 @@ describe('ClaudeAgentService.spawn', () => {
 
     child.stdout.emit(
       'data',
-      Buffer.from(JSON.stringify({ session_id: 'sess_1', result: 'refused: ambiguous request', is_error: true })),
+      Buffer.from(
+        JSON.stringify({
+          session_id: 'sess_1',
+          result: 'refused: ambiguous request',
+          is_error: true,
+        }),
+      ),
     );
     child.emit('close', 0);
 

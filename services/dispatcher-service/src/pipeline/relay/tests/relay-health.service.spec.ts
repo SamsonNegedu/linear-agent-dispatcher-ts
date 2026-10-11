@@ -2,7 +2,9 @@ import { RelayHealthService } from '../relay-health.service';
 import { baseRelayModuleTestBuilder } from './relay-module-test-utils';
 import type { DispatcherConfig } from '../../../config/config';
 
-async function buildService(overrides: Partial<DispatcherConfig['relay']> = {}): Promise<RelayHealthService> {
+async function buildService(
+  overrides: Partial<DispatcherConfig['relay']> = {},
+): Promise<RelayHealthService> {
   const module = await baseRelayModuleTestBuilder({
     relay: {
       enabled: true,

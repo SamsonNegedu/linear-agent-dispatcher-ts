@@ -61,8 +61,18 @@ export function checkRouting(repos: ResolvedRepo[], home?: string): RoutingRepor
 export function formatRoutingTable(report: RoutingReport): string {
   if (report.rows.length === 0) return '(no mappings)';
   const header = ['', 'REPO', 'ISSUE LABEL', 'SKILL', 'FROM'];
-  const body = report.rows.map((r) => [mark(r.lookup), r.repo, r.issueLabel, `/${r.skill}`, r.source]);
+  const body = report.rows.map((r) => [
+    mark(r.lookup),
+    r.repo,
+    r.issueLabel,
+    `/${r.skill}`,
+    r.source,
+  ]);
   const widths = header.map((h, i) => Math.max(h.length, ...body.map((row) => row[i].length)));
-  const line = (cells: string[]): string => cells.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd();
+  const line = (cells: string[]): string =>
+    cells
+      .map((c, i) => c.padEnd(widths[i]))
+      .join('  ')
+      .trimEnd();
   return [line(header), ...body.map(line)].join('\n');
 }

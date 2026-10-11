@@ -73,17 +73,13 @@
                 }
               }
             },
-            "required": [
-              "path"
-            ],
+            "required": ["path"],
             "additionalProperties": false
           }
         ]
       }
     }
   },
-  "required": [
-    "repositories"
-  ],
+  "required": ["repositories"],
   "additionalProperties": false
 }

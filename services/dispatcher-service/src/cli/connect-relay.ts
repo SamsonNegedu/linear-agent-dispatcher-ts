@@ -259,7 +259,9 @@ function step6_printSuccess(
   console.log(`   Secret: ${secretDisplay}\n`);
 
   console.log('📝 Next steps:');
-  console.log('   Start (or restart) the dispatcher; it will receive webhooks from all registered teams.');
+  console.log(
+    '   Start (or restart) the dispatcher; it will receive webhooks from all registered teams.',
+  );
   console.log('   Tip: from the repo root, `pnpm dev:up` does all of this for you.\n');
 }
 

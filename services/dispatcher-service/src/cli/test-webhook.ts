@@ -42,9 +42,13 @@ function parseArgs(): CLIArgs {
     console.error('');
     console.error('Examples:');
     console.error('  pnpm test-webhook -- --issue-id=LIN-123 --label=my-repo,agent-implement');
-    console.error('  pnpm test-webhook -- --issue-id=LIN-456 --label=my-repo,agent-plan --team-key=ENG');
+    console.error(
+      '  pnpm test-webhook -- --issue-id=LIN-456 --label=my-repo,agent-plan --team-key=ENG',
+    );
     console.error('');
-    console.error('--label takes the repo label and one mode label, comma-separated (see `pnpm routes`).');
+    console.error(
+      '--label takes the repo label and one mode label, comma-separated (see `pnpm routes`).',
+    );
     process.exit(1);
   }
 
@@ -86,7 +90,10 @@ function loadConfig() {
 function createNormalizedEvent(args: CLIArgs): NormalizedEvent {
   const issueId = args.issueId.includes('-') ? args.issueId : `TEST-${args.issueId}`;
   const issueIdentifier = issueId;
-  const labels = args.label.split(',').map((l) => l.trim()).filter(Boolean);
+  const labels = args.label
+    .split(',')
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   const timestamp = Date.now();
 

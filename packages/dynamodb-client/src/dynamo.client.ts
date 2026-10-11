@@ -113,7 +113,9 @@ export class DynamoClient {
         'BatchGetItems',
         { [table]: { Keys: keyChunk } },
         async (requestItems) => {
-          const response = await this.docClient.send(new BatchGetCommand({ RequestItems: requestItems }));
+          const response = await this.docClient.send(
+            new BatchGetCommand({ RequestItems: requestItems }),
+          );
           results.push(...((response.Responses?.[table] ?? []) as T[]));
           return nonEmpty(response.UnprocessedKeys);
         },
@@ -236,7 +238,9 @@ export class DynamoClient {
       label,
       { [table]: requests },
       async (requestItems) => {
-        const response = await this.docClient.send(new BatchWriteCommand({ RequestItems: requestItems }));
+        const response = await this.docClient.send(
+          new BatchWriteCommand({ RequestItems: requestItems }),
+        );
         return nonEmpty(response.UnprocessedItems);
       },
     );

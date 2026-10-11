@@ -3,10 +3,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, isAbsolute, resolve } from 'path';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import {
-  RoutingConfigService,
-  routingConfigPath,
-} from '../config/routing-config.service';
+import { RoutingConfigService, routingConfigPath } from '../config/routing-config.service';
 import { checkRouting, formatRoutingTable } from '../config/routing-report';
 import { formatSchemaIssues, repoLabel, routingConfigSchema } from '../config/routing-schema';
 import { listRepoSkills } from '../config/skill-discovery';

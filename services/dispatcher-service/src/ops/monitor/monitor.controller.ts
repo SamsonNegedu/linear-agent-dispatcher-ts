@@ -1,4 +1,12 @@
-import { Controller, Get, HttpCode, HttpException, HttpStatus, Logger, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpException,
+  HttpStatus,
+  Logger,
+  Query,
+} from '@nestjs/common';
 import type { Run } from '../../store/store.interfaces';
 import { MonitorService, type MonitorSummary } from './monitor.service';
 

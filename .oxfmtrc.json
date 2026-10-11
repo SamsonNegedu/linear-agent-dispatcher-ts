@@ -12,6 +12,8 @@
     "coverage",
     ".sst",
     ".turbo",
-    "pnpm-lock.yaml"
+    "pnpm-lock.yaml",
+    ".claude",
+    "skills-lock.json"
   ]
 }

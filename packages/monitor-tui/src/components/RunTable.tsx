@@ -18,7 +18,15 @@ export function RunTable({
 }): React.ReactNode {
   const colors = useTheme();
   return (
-    <box style={{ border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', flexGrow: 1 }}>
+    <box
+      style={{
+        border: true,
+        borderStyle: 'rounded',
+        borderColor: colors.accent,
+        flexDirection: 'column',
+        flexGrow: 1,
+      }}
+    >
       <text fg={colors.muted} attributes={1} wrapMode="none" truncate>
         {'  '}
         {columns.map((c) => pad(c.label, c.width)).join('  ')}
@@ -30,7 +38,8 @@ export function RunTable({
           {rows.map((row, i) => (
             <box key={i} style={{ flexDirection: 'row' }}>
               <text wrapMode="none" truncate>
-                <Dot status={status} /> {row.map((cell, j) => pad(cell, columns[j].width)).join('  ')}
+                <Dot status={status} />{' '}
+                {row.map((cell, j) => pad(cell, columns[j].width)).join('  ')}
               </text>
             </box>
           ))}

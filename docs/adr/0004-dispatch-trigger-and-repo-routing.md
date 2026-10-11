@@ -12,7 +12,7 @@ The dispatcher receives every Linear webhook for a subscribed team and must
 decide, in order:
 
 1. **Should this webhook trigger a dispatch at all?** Not every webhook
-   represents real work — Linear fires an `Issue` `update` webhook for *any*
+   represents real work — Linear fires an `Issue` `update` webhook for _any_
    field change, including our own bot posting a progress/success comment
    (which only bumps `updatedAt`).
 2. **If so, which repository and Claude skill does it route to?** Teams
@@ -27,9 +27,9 @@ the relay's Lambda/DynamoDB/NestJS choices into one record instead of three.
 
 ### Why trigger semantics needed fixing
 
-The first version of trigger logic only did step 2: if the issue's *current*
+The first version of trigger logic only did step 2: if the issue's _current_
 labels resolved to a valid repo + skill, it dispatched — with no regard for
-*why* this particular webhook fired. Trigger labels stay on the issue after a
+_why_ this particular webhook fired. Trigger labels stay on the issue after a
 run completes (nothing removes them), so a self-authored progress/success
 comment (which only bumps `updatedAt`) re-passes label validation and
 re-dispatches indefinitely: run → comment → webhook → run → ... Each
@@ -54,7 +54,7 @@ codebases.
 Use Linear's `updatedFrom` field generically instead of special-casing
 labels. `updatedFrom` (present on `update` webhooks only) holds the previous
 value of every field that actually changed in that specific delivery —
-nothing more. A webhook whose `updatedFrom` contains *only* `updatedAt` means
+nothing more. A webhook whose `updatedFrom` contains _only_ `updatedAt` means
 no real issue field changed; something merely touched the issue's timestamp
 as a side effect (a comment being posted is the only way this happens in
 practice).
@@ -73,7 +73,7 @@ practice).
    create, so there's nothing to diff against; the issue's initial labels
    aren't a "change" to react to.
 3. Issue `update` events dispatch if `changedFields` (the `updatedFrom` keys,
-   minus `updatedAt`) is non-empty — i.e. *some* real field changed, of any
+   minus `updatedAt`) is non-empty — i.e. _some_ real field changed, of any
    kind. Stage 2 (below) still separately decides whether that field state
    routes anywhere. Delegate assignment (setting the dispatcher's OAuth agent
    as an issue's delegate) is an `Issue` `update` with
@@ -87,6 +87,7 @@ all," not "where does it go" — that's Stage 2.
 ### Stage 2: Where it routes
 
 Use Linear issue labels for routing:
+
 - **Domain labels** map to repositories via `routing.config.json`. A repo's label
   is its folder name unless the entry sets `label`.
 - **Mode labels** `agent-<name>` run the Claude skill `/<name>` in that repo — but
@@ -109,10 +110,7 @@ template). A repo is just a path unless something needs overriding:
     "duplicateRunWindowMs": 60000
   },
   "skills": ["implement", "fix-bug"],
-  "repositories": [
-    "~/code/backend",
-    { "path": "~/code/frontend", "skills": ["design-review"] }
-  ]
+  "repositories": ["~/code/backend", { "path": "~/code/frontend", "skills": ["design-review"] }]
 }
 ```
 
@@ -125,10 +123,11 @@ per-repo `issueLabelToSkill` map and no `skills` list — still loads, but no lo
 exposes anything on its own beyond the mappings it names.
 
 The top-level `policy` block is optional (each field defaults if omitted) and
-governs *whether* a dispatch happens at all, on top of Stage 1 — see
+governs _whether_ a dispatch happens at all, on top of Stage 1 — see
 "Dispatch Policy" under Implementation Details.
 
 `LinearDispatchAdapter.resolveRouting()`:
+
 1. Check issue labels against repository keys in config — exactly one domain
    label required; zero or multiple matches is a validation error (posted as
    a Linear comment), there is no default repo to fall back to
@@ -154,11 +153,12 @@ API key (`LinearGraphQLClient` is only constructed when one is present),
 ## Consequences
 
 **Advantages:**
+
 - Kills the comment-triggered feedback loop: a comment-only update has
   `changedFields: []`.
 - Restores every other legitimate trigger (delegate assignment, state
   changes, any field edit) without enumerating them — the Stage 1 check is
-  generic over *whether something changed*, not *which specific field*.
+  generic over _whether something changed_, not _which specific field_.
 - No new infrastructure for Stage 1: purely a read of a field Linear already
   sends, no actor/bot-identity lookups, no extra API calls, no cached state.
   Keeps the webhook-parsing layer "mildly dumb" — it reports what changed,
@@ -172,7 +172,8 @@ API key (`LinearGraphQLClient` is only constructed when one is present),
   instead of routing somewhere unintended.
 
 **Disadvantages:**
-- A human editing an *unrelated* field (e.g. fixing a typo in the
+
+- A human editing an _unrelated_ field (e.g. fixing a typo in the
   description) on an issue that still carries valid trigger labels will
   re-dispatch a run, since `changedFields` doesn't distinguish "relevant"
   fields from irrelevant ones. Accepted: no evidence yet that this happens
@@ -183,6 +184,7 @@ API key (`LinearGraphQLClient` is only constructed when one is present),
   needs its own `routing.config.json`.
 
 **Mitigation:**
+
 - Use Linear automations to add repo labels by default
 - Preflight validation warns about missing repo paths and skill config at
   startup (see "Preflight Validation" below) — doesn't prevent bad config
@@ -192,21 +194,21 @@ API key (`LinearGraphQLClient` is only constructed when one is present),
 
 **Trigger semantics (Stage 1):**
 
-| Approach | Rejected because |
-|---|---|
-| Require `labelChange.added` non-empty (first attempt) | Over-corrected — blocked delegate assignment and any other legitimate non-label trigger; see Context |
-| Track the webhook actor and skip self-authored updates | Requires the dispatcher to know its own bot/OAuth user identity (a lookup + cache), and belongs to dispatcher-specific config, not the generic webhook-parsing layer shared with the relay |
-| Time-based debounce (ignore updates within N seconds of our own last comment) | Doesn't distinguish cause from coincidence — a genuine human edit seconds after a bot comment would also be dropped; adds a timing-dependent failure mode instead of a structural one |
+| Approach                                                                      | Rejected because                                                                                                                                                                           |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Require `labelChange.added` non-empty (first attempt)                         | Over-corrected — blocked delegate assignment and any other legitimate non-label trigger; see Context                                                                                       |
+| Track the webhook actor and skip self-authored updates                        | Requires the dispatcher to know its own bot/OAuth user identity (a lookup + cache), and belongs to dispatcher-specific config, not the generic webhook-parsing layer shared with the relay |
+| Time-based debounce (ignore updates within N seconds of our own last comment) | Doesn't distinguish cause from coincidence — a genuine human edit seconds after a bot comment would also be dropped; adds a timing-dependent failure mode instead of a structural one      |
 
 **Routing (Stage 2):**
 
-| Approach | Rejected Because |
-|----------|------------------|
-| **Linear Projects** | Multiple projects per repo; hierarchy too complex |
-| **Issue Assignee** | Unreliable; people work across multiple repos |
-| **Custom Fields** | Requires API setup per workspace |
+| Approach             | Rejected Because                                          |
+| -------------------- | --------------------------------------------------------- |
+| **Linear Projects**  | Multiple projects per repo; hierarchy too complex         |
+| **Issue Assignee**   | Unreliable; people work across multiple repos             |
+| **Custom Fields**    | Requires API setup per workspace                          |
 | **Monorepo Subdirs** | Breaks multi-repo setups; couples dispatcher to structure |
-| **Default-Only** | Doesn't support multi-repo use case |
+| **Default-Only**     | Doesn't support multi-repo use case                       |
 
 ## Implementation Details
 
@@ -221,7 +223,7 @@ API key (`LinearGraphQLClient` is only constructed when one is present),
 
 Config that resolves at startup but points at something broken (a repo path that
 doesn't exist, a listed skill the repo doesn't have) would otherwise only
-surface as an error on the *first webhook* for that repo — and, because runs are
+surface as an error on the _first webhook_ for that repo — and, because runs are
 unattended, as a run that silently does nothing. `PreflightService` runs on
 dispatcher startup (unless `PREFLIGHT_SKIP=1`) and checks:
 

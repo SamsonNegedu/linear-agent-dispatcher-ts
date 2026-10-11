@@ -25,7 +25,9 @@ function makeConfig(apiKey?: string): DispatcherConfig {
 }
 
 async function buildService(apiKey?: string): Promise<IssueCommentService> {
-  const module = await Test.createTestingModule({ imports: [ExecutorModule, DispatcherConfigModule] })
+  const module = await Test.createTestingModule({
+    imports: [ExecutorModule, DispatcherConfigModule],
+  })
     .overrideModule(StoreModule)
     .useModule(FakeStoreModule)
     .overrideProvider('DispatcherConfig')

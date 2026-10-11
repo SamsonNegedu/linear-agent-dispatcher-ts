@@ -5,7 +5,7 @@ and the local dispatcher it fans webhooks out to.
 
 ## Start Here
 
-Read these to understand *why the system looks the way it does*.
+Read these to understand _why the system looks the way it does_.
 
 - **[ADR 0001: Relay Service Architecture](0001-relay-service-architecture.md)** — Why a dedicated, serverless relay exists at all: OAuth gateway, subscriber registry, Lambda + DynamoDB + NestJS/Fastify.
 - **[ADR 0002: OAuth and Subscriber Registration](0002-oauth-and-subscriber-registration.md)** — How a dispatcher connects: two-stage OAuth flow, HMAC signing.
@@ -48,11 +48,11 @@ When adding a new feature or changing an existing decision:
 
 ## Quick Reference
 
-| Concern                                          | ADR                                                    |
-| ------------------------------------------------- | ------------------------------------------------------- |
-| Why a relay service at all, and what's it built with? | [0001](0001-relay-service-architecture.md)            |
-| How does OAuth work?                             | [0002](0002-oauth-and-subscriber-registration.md)        |
-| How are webhooks delivered?                      | [0003](0003-webhook-routing-and-delivery.md)              |
+| Concern                                                                  | ADR                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------- |
+| Why a relay service at all, and what's it built with?                    | [0001](0001-relay-service-architecture.md)        |
+| How does OAuth work?                                                     | [0002](0002-oauth-and-subscriber-registration.md) |
+| How are webhooks delivered?                                              | [0003](0003-webhook-routing-and-delivery.md)      |
 | Should a webhook dispatch at all, and which repo/skill does it route to? | [0004](0004-dispatch-trigger-and-repo-routing.md) |
-| Why doesn't re-registering create a duplicate?   | [0005](0005-deterministic-subscriber-identity.md)          |
-| What happens if a run fails, hangs, crashes, or needs to ask something? | [0006](0006-dispatcher-run-reliability.md) |
+| Why doesn't re-registering create a duplicate?                           | [0005](0005-deterministic-subscriber-identity.md) |
+| What happens if a run fails, hangs, crashes, or needs to ask something?  | [0006](0006-dispatcher-run-reliability.md)        |

@@ -21,7 +21,9 @@ import type { DispatcherConfig } from '../../config/config';
 const issueContextResolverProvider: Provider = {
   provide: 'IIssueContextResolver',
   useFactory: (config: DispatcherConfig) =>
-    config.linear.apiKey ? new LinearGraphQLClient(config.linear.apiKey) : new NullIssueContextResolver(),
+    config.linear.apiKey
+      ? new LinearGraphQLClient(config.linear.apiKey)
+      : new NullIssueContextResolver(),
   inject: ['DispatcherConfig'],
 };
 
@@ -43,7 +45,12 @@ const dispatchAdapterRegistryProvider: Provider = {
 };
 
 @Module({
-  imports: [PreflightModule, StoreModule, ExecutorModule, TypeOrmModule.forFeature([WebhookQueueEntity])],
+  imports: [
+    PreflightModule,
+    StoreModule,
+    ExecutorModule,
+    TypeOrmModule.forFeature([WebhookQueueEntity]),
+  ],
   controllers: [RelayWebhookController],
   providers: [
     DispatcherService,

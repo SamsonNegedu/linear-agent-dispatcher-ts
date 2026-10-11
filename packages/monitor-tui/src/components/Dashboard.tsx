@@ -19,7 +19,16 @@ export function Dashboard({
   const status = relayConnectionStatus(relayEnabled, relayHealth, colors);
 
   return (
-    <box style={{ border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', flexGrow: 1, padding: 1 }}>
+    <box
+      style={{
+        border: true,
+        borderStyle: 'rounded',
+        borderColor: colors.accent,
+        flexDirection: 'column',
+        flexGrow: 1,
+        padding: 1,
+      }}
+    >
       <text fg={colors.accent} attributes={1}>
         Connectivity
       </text>
@@ -58,7 +67,9 @@ export function Dashboard({
               {'  '}
               <span fg={colors.muted}>{pad('Domain:', LABEL_WIDTH)}</span>
               <span attributes={1}>{repo.domainLabel}</span>{' '}
-              <span fg={repo.runningCount > 0 ? colors.running : colors.muted}>({repo.runningCount} running)</span>
+              <span fg={repo.runningCount > 0 ? colors.running : colors.muted}>
+                ({repo.runningCount} running)
+              </span>
             </text>
             <text wrapMode="none" truncate>
               {'  '}

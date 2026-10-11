@@ -97,11 +97,23 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
     const selected = renderer.hasSelection ? renderer.getSelection()?.getSelectedText() : '';
     const text =
       selected ||
-      tabText(TAB_NAMES[currentTab], { summary, activeRuns, queueRuns, completedRuns, failedRuns, needsInputRuns, relayHealth });
+      tabText(TAB_NAMES[currentTab], {
+        summary,
+        activeRuns,
+        queueRuns,
+        completedRuns,
+        failedRuns,
+        needsInputRuns,
+        relayHealth,
+      });
     if (!text) return showToast('Nothing to copy');
     const ok = await copyToClipboard(text, (t) => renderer.copyToClipboardOSC52(t));
     const what = selected ? 'selection' : `${TAB_NAMES[currentTab]} tab`;
-    showToast(ok ? `Copied ${what} (${text.split('\n').length} lines)` : 'Copy failed: no clipboard available');
+    showToast(
+      ok
+        ? `Copied ${what} (${text.split('\n').length} lines)`
+        : 'Copy failed: no clipboard available',
+    );
   };
 
   useKeyboard((key) => {
@@ -118,7 +130,11 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
       const next = !renderer.useMouse;
       renderer.useMouse = next;
       setMouseOn(next);
-      showToast(next ? 'Mouse on (scroll/click). Terminal selection off' : 'Mouse off: select text with the mouse, Cmd+C');
+      showToast(
+        next
+          ? 'Mouse on (scroll/click). Terminal selection off'
+          : 'Mouse off: select text with the mouse, Cmd+C',
+      );
       return;
     }
     const tabNum = parseInt(key.name, 10);
@@ -131,23 +147,23 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
 
   const tabCounts: Record<TabName, string | null> = summary
     ? {
-      Dashboard: null,
-      Logs: null,
-      Relay: null,
-      Runs: `${summary.counts.running}/${summary.counts.pending}`,
-      'Needs input': summary.counts.needs_input > 0 ? `${summary.counts.needs_input}` : null,
-      Completed: `${summary.counts.succeeded}`,
-      Failed: `${summary.counts.failed}`,
-    }
+        Dashboard: null,
+        Logs: null,
+        Relay: null,
+        Runs: `${summary.counts.running}/${summary.counts.pending}`,
+        'Needs input': summary.counts.needs_input > 0 ? `${summary.counts.needs_input}` : null,
+        Completed: `${summary.counts.succeeded}`,
+        Failed: `${summary.counts.failed}`,
+      }
     : {
-      Dashboard: null,
-      Logs: null,
-      Relay: null,
-      Runs: null,
-      'Needs input': null,
-      Completed: null,
-      Failed: null,
-    };
+        Dashboard: null,
+        Logs: null,
+        Relay: null,
+        Runs: null,
+        'Needs input': null,
+        Completed: null,
+        Failed: null,
+      };
 
   const sidebarOptions = TAB_NAMES.map((name) => ({
     name: tabCounts[name] !== null ? `${name} (${tabCounts[name]})` : name,
@@ -157,7 +173,7 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
   const switchHint = `↑↓/1-${TAB_NAMES.length} switch · y copy · m mouse ${mouseOn ? 'off' : 'on'} · q quit · Ctrl+R restart`;
 
   const footerHint = (): string => {
-    if (relayMode !== 'idle') return "Enter confirm · Esc cancel";
+    if (relayMode !== 'idle') return 'Enter confirm · Esc cancel';
     if (currentTab === TAB.Relay) return `c connect · u update · ${switchHint}`;
     return switchHint;
   };
@@ -189,7 +205,9 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
             {'  '}
             <span fg={colors.failed}>● {summary.counts.failed} failed</span>
             {summary.counts.needs_input > 0 ? (
-              <span fg={colors.needs_input}>{'  '}● {summary.counts.needs_input} need input</span>
+              <span fg={colors.needs_input}>
+                {'  '}● {summary.counts.needs_input} need input
+              </span>
             ) : null}
             {'  '}
             <span fg={relayStatus.color}>● relay: {relayStatus.label}</span>
@@ -198,7 +216,16 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
       </box>
       <box style={{ flexDirection: 'row', height: contentHeight }}>
         <box
-          style={{ width: 22, height: contentHeight, border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', paddingLeft: 1, paddingRight: 1 }}
+          style={{
+            width: 22,
+            height: contentHeight,
+            border: true,
+            borderStyle: 'rounded',
+            borderColor: colors.accent,
+            flexDirection: 'column',
+            paddingLeft: 1,
+            paddingRight: 1,
+          }}
           onMouseDown={() => {
             if (!contentReady || relayMode !== 'idle') return;
             sidebarRef.current?.focus();
@@ -221,10 +248,14 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
           onMouseDown={() => sidebarRef.current?.blur()}
         >
           {!contentReady ? (
-            <text fg={error ? colors.failed : colors.muted}>{error ? `Error: ${error}` : 'Loading...'}</text>
+            <text fg={error ? colors.failed : colors.muted}>
+              {error ? `Error: ${error}` : 'Loading...'}
+            </text>
           ) : (
             <>
-              {currentTab === TAB.Dashboard && <Dashboard summary={summary} relayHealth={relayHealth} />}
+              {currentTab === TAB.Dashboard && (
+                <Dashboard summary={summary} relayHealth={relayHealth} />
+              )}
               {currentTab === TAB.Logs && <LogsTab />}
               {currentTab === TAB.Relay && (
                 <RelayTab
@@ -243,7 +274,9 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
         </box>
       </box>
       <box style={{ paddingLeft: 1 }}>
-        <text fg={toast ? colors.succeeded : colors.muted}>{toast ?? (contentReady ? footerHint() : '')}</text>
+        <text fg={toast ? colors.succeeded : colors.muted}>
+          {toast ?? (contentReady ? footerHint() : '')}
+        </text>
       </box>
     </box>
   );

@@ -191,7 +191,9 @@ export class TypeORMStoreRepository implements IStoreRepository {
     await this.runRepository.query('SELECT 1');
   }
 
-  async getRunStats(sinceMs: number): Promise<{ lastWebhookAt: Date | null; byStatus: Record<string, number> }> {
+  async getRunStats(
+    sinceMs: number,
+  ): Promise<{ lastWebhookAt: Date | null; byStatus: Record<string, number> }> {
     const cutoff = new Date(Date.now() - sinceMs);
     const runs = await this.runRepository.find({
       where: { startedAt: MoreThanOrEqual(cutoff) },

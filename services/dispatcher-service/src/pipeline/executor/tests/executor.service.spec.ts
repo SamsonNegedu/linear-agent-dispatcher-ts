@@ -124,7 +124,12 @@ describe('ExecutorService.executeRun', () => {
 
     await service.executeRun('run_1', makeEvent());
 
-    expect(issueComments.postProgress).toHaveBeenCalledWith('issue_1', 'repo-a', 'implement', 'run_1');
+    expect(issueComments.postProgress).toHaveBeenCalledWith(
+      'issue_1',
+      'repo-a',
+      'implement',
+      'run_1',
+    );
     expect(issueComments.postSuccess).toHaveBeenCalled();
     expect(activityNotifier.postStart).not.toHaveBeenCalled();
   });
@@ -162,7 +167,10 @@ describe('ExecutorService.executeRun', () => {
 
     await service.executeRun('run_1', makeEvent());
 
-    expect(issueComments.postRequired).toHaveBeenCalledWith('issue_1', 'Stop rule: which design token?');
+    expect(issueComments.postRequired).toHaveBeenCalledWith(
+      'issue_1',
+      'Stop rule: which design token?',
+    );
     expect(issueComments.postSuccess).not.toHaveBeenCalled();
     expect(issueComments.postFailure).not.toHaveBeenCalled();
   });

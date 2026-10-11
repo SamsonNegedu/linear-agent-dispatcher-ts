@@ -43,7 +43,11 @@ export class MonitorService {
         issueLabelToSkill: repo.issueLabelToSkill
           ? Object.entries(repo.issueLabelToSkill).map(([label, skill]) => {
               const { status } = findSkill(repo.path, skill);
-              return { label, skill, skillFound: status === 'unverifiable' ? null : status === 'found' };
+              return {
+                label,
+                skill,
+                skillFound: status === 'unverifiable' ? null : status === 'found',
+              };
             })
           : [],
         runningCount: 0,

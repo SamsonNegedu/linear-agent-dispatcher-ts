@@ -52,7 +52,10 @@ export class ClaudeAgentService {
     this.logger.log(`Claude spawn: /${skill} for ${issueIdentifier} in ${repoPath}`);
 
     const { allowedTools = [], allowAllMcp, permissionMode } = this.config.executor;
-    const allowRules = [...allowedTools, ...(allowAllMcp ? await this.mcpDiscovery.allowRules(repoPath) : [])];
+    const allowRules = [
+      ...allowedTools,
+      ...(allowAllMcp ? await this.mcpDiscovery.allowRules(repoPath) : []),
+    ];
 
     return new Promise((resolve, reject) => {
       const prompt = `/${skill} ${issueIdentifier}`;
@@ -213,7 +216,9 @@ export class ClaudeAgentService {
       process.kill(-pid, signal);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.debug(`killProcessGroup(${pid}, ${signal}) failed (likely already exited): ${errorMessage}`);
+      this.logger.debug(
+        `killProcessGroup(${pid}, ${signal}) failed (likely already exited): ${errorMessage}`,
+      );
     }
   }
 

@@ -4,7 +4,10 @@ import React from 'react';
 import { ThemeProvider } from './theme-context';
 import { App } from './App';
 import { loadEnv, dispatcherDir } from './utils/env';
-import { runRelayScript as runRelayScriptCommand, type RelayScript } from './services/dispatcher-process.service';
+import {
+  runRelayScript as runRelayScriptCommand,
+  type RelayScript,
+} from './services/dispatcher-process.service';
 
 async function main(): Promise<void> {
   let rendererInstance: Awaited<ReturnType<typeof createCliRenderer>> | null = null;

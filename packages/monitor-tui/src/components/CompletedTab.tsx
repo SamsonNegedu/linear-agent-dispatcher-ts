@@ -23,6 +23,11 @@ export function CompletedTab({ runs }: { runs: Run[] }): React.ReactNode {
     ];
   });
   return (
-    <RunTable columns={ROW_COLUMNS.completed} rows={rows} status="succeeded" emptyLabel="No completed runs yet" />
+    <RunTable
+      columns={ROW_COLUMNS.completed}
+      rows={rows}
+      status="succeeded"
+      emptyLabel="No completed runs yet"
+    />
   );
 }

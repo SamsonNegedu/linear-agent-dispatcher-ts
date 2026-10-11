@@ -4,7 +4,13 @@ import { formatTime } from '../utils/format';
 import type { Run } from '../types';
 import { RunTable } from './RunTable';
 
-export function RunsTab({ activeRuns, queueRuns }: { activeRuns: Run[]; queueRuns: Run[] }): React.ReactNode {
+export function RunsTab({
+  activeRuns,
+  queueRuns,
+}: {
+  activeRuns: Run[];
+  queueRuns: Run[];
+}): React.ReactNode {
   const activeRows = activeRuns.map((run) => [
     run.domainLabel,
     run.issueIdentifier || '—',
@@ -22,10 +28,20 @@ export function RunsTab({ activeRuns, queueRuns }: { activeRuns: Run[]; queueRun
   return (
     <box style={{ flexDirection: 'column', flexGrow: 1 }}>
       <text attributes={1}>Active ({activeRuns.length})</text>
-      <RunTable columns={ROW_COLUMNS.active} rows={activeRows} status="running" emptyLabel="No active runs" />
+      <RunTable
+        columns={ROW_COLUMNS.active}
+        rows={activeRows}
+        status="running"
+        emptyLabel="No active runs"
+      />
       <text> </text>
       <text attributes={1}>Queue ({queueRuns.length})</text>
-      <RunTable columns={ROW_COLUMNS.queue} rows={queueRows} status="pending" emptyLabel="Queue is empty" />
+      <RunTable
+        columns={ROW_COLUMNS.queue}
+        rows={queueRows}
+        status="pending"
+        emptyLabel="Queue is empty"
+      />
     </box>
   );
 }

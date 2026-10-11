@@ -131,9 +131,18 @@ describe('WebhookService.fanOutWebhook', () => {
   });
 
   it('counts per-subscriber delivery failures without failing the whole fan-out', async () => {
-    const okSubscriber = makeSubscriber({ subscriberId: 'sub_ok', localEndpoint: 'http://ok.local' });
-    const failSubscriber = makeSubscriber({ subscriberId: 'sub_fail', localEndpoint: 'http://fail.local' });
-    subscriberService.getSubscribersByTeamAndAssignee.mockResolvedValue([okSubscriber, failSubscriber]);
+    const okSubscriber = makeSubscriber({
+      subscriberId: 'sub_ok',
+      localEndpoint: 'http://ok.local',
+    });
+    const failSubscriber = makeSubscriber({
+      subscriberId: 'sub_fail',
+      localEndpoint: 'http://fail.local',
+    });
+    subscriberService.getSubscribersByTeamAndAssignee.mockResolvedValue([
+      okSubscriber,
+      failSubscriber,
+    ]);
     fetchMock.mockImplementation((endpoint: string) =>
       endpoint === 'http://ok.local'
         ? Promise.resolve({ ok: true, status: 200 })

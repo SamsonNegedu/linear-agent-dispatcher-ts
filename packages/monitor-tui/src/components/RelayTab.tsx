@@ -9,7 +9,12 @@ import { RelayForm } from './RelayForm';
 
 const LABEL_WIDTH = 16;
 
-export function RelayTab({ onRunScript, mode, setMode, relayHealth }: RelayTabProps): React.ReactNode {
+export function RelayTab({
+  onRunScript,
+  mode,
+  setMode,
+  relayHealth,
+}: RelayTabProps): React.ReactNode {
   const colors = useTheme();
   useKeyboard((key) => {
     if (mode !== 'idle') return;
@@ -17,8 +22,13 @@ export function RelayTab({ onRunScript, mode, setMode, relayHealth }: RelayTabPr
     if (key.name === 'u') setMode('update');
   });
 
-  const { relayEnabled, relayUrl, dispatcherUrl, relaySubscriberId: subscriberId, relaySubscriberSecret: secret } =
-    getConfig();
+  const {
+    relayEnabled,
+    relayUrl,
+    dispatcherUrl,
+    relaySubscriberId: subscriberId,
+    relaySubscriberSecret: secret,
+  } = getConfig();
   const secretDisplay = secret ? `${secret.slice(0, 6)}...${secret.slice(-4)}` : '(none)';
   const status = relayConnectionStatus(relayEnabled, relayHealth, colors);
 
@@ -33,7 +43,10 @@ export function RelayTab({ onRunScript, mode, setMode, relayHealth }: RelayTabPr
         title="Connect to Relay"
         fields={connectFields}
         onSubmit={(values) => {
-          const args = [`--relay-url=${values.relayUrl}`, `--local-endpoint=${values.localEndpoint}`];
+          const args = [
+            `--relay-url=${values.relayUrl}`,
+            `--local-endpoint=${values.localEndpoint}`,
+          ];
           if (values.port) args.push(`--port=${values.port}`);
           setMode('idle');
           onRunScript('connect-relay', args);
@@ -64,7 +77,16 @@ export function RelayTab({ onRunScript, mode, setMode, relayHealth }: RelayTabPr
   }
 
   return (
-    <box style={{ border: true, borderStyle: 'rounded', borderColor: colors.accent, flexDirection: 'column', flexGrow: 1, padding: 1 }}>
+    <box
+      style={{
+        border: true,
+        borderStyle: 'rounded',
+        borderColor: colors.accent,
+        flexDirection: 'column',
+        flexGrow: 1,
+        padding: 1,
+      }}
+    >
       <box style={{ flexDirection: 'row' }}>
         <text attributes={1}>Relay Connection</text>
         <text>
@@ -112,7 +134,8 @@ export function RelayTab({ onRunScript, mode, setMode, relayHealth }: RelayTabPr
 
       <text> </text>
       <text fg={colors.muted}>
-        Press <span fg={colors.accent}>c</span> to connect, <span fg={colors.accent}>u</span> to update endpoint
+        Press <span fg={colors.accent}>c</span> to connect, <span fg={colors.accent}>u</span> to
+        update endpoint
       </text>
     </box>
   );

@@ -8,7 +8,11 @@ interface UseGlobalShortcutsOptions {
   onRestartSettled: (error?: Error) => void;
 }
 
-export function useGlobalShortcuts({ onExit, onRestartStart, onRestartSettled }: UseGlobalShortcutsOptions): void {
+export function useGlobalShortcuts({
+  onExit,
+  onRestartStart,
+  onRestartSettled,
+}: UseGlobalShortcutsOptions): void {
   useKeyboard((key) => {
     if (key.ctrl && key.name === 'c') {
       onExit();
@@ -16,7 +20,10 @@ export function useGlobalShortcuts({ onExit, onRestartStart, onRestartSettled }:
     }
     if (key.ctrl && key.name === 'r') {
       onRestartStart();
-      restartDispatcherServer(`http://localhost:${getConfig().port}/monitor/summary`, onRestartSettled);
+      restartDispatcherServer(
+        `http://localhost:${getConfig().port}/monitor/summary`,
+        onRestartSettled,
+      );
     }
   });
 }

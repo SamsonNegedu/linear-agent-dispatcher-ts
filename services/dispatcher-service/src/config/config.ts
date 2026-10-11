@@ -39,8 +39,7 @@ export interface DispatcherConfig {
 // decide a run is stuck, so it isn't purely a per-run execution limit.
 const DEFAULT_MAX_RUN_DURATION_MS = 30 * 60 * 1000;
 
-const DEFAULT_ALLOWED_TOOLS =
-  'Read,Edit,Write,Glob,Grep,Bash,Skill,Task,TodoWrite,NotebookEdit';
+const DEFAULT_ALLOWED_TOOLS = 'Read,Edit,Write,Glob,Grep,Bash,Skill,Task,TodoWrite,NotebookEdit';
 
 export const loadConfig = (): DispatcherConfig => {
   const nodeEnv = process.env.NODE_ENV || 'development';

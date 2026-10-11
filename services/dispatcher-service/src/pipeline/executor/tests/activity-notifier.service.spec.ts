@@ -25,7 +25,9 @@ function makeConfig(apiKey?: string): DispatcherConfig {
 }
 
 async function buildService(apiKey?: string): Promise<ActivityNotifierService> {
-  const module = await Test.createTestingModule({ imports: [ExecutorModule, DispatcherConfigModule] })
+  const module = await Test.createTestingModule({
+    imports: [ExecutorModule, DispatcherConfigModule],
+  })
     .overrideModule(StoreModule)
     .useModule(FakeStoreModule)
     .overrideProvider('DispatcherConfig')
@@ -49,7 +51,11 @@ describe('ActivityNotifierService', () => {
     const service = await buildService('key_1');
     await service.postElicitation('session_1', 'missing domain label');
 
-    expect(createActivity).toHaveBeenCalledWith('session_1', 'elicitation', expect.stringContaining('missing domain label'));
+    expect(createActivity).toHaveBeenCalledWith(
+      'session_1',
+      'elicitation',
+      expect.stringContaining('missing domain label'),
+    );
   });
 
   it('silently skips posting when no sessionId is provided', async () => {
@@ -79,6 +85,8 @@ describe('ActivityNotifierService', () => {
 
     const service = await buildService('key_1');
 
-    await expect(service.postStart('session_1', 'ISSUE-1', 'repo-a', 'implement', 'run_1')).resolves.toBeUndefined();
+    await expect(
+      service.postStart('session_1', 'ISSUE-1', 'repo-a', 'implement', 'run_1'),
+    ).resolves.toBeUndefined();
   });
 });

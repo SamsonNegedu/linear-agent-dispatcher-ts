@@ -36,9 +36,12 @@ export const TAB_NAMES = [
 
 export type TabName = (typeof TAB_NAMES)[number];
 
-export const TAB: Record<TabName, number> = TAB_NAMES.reduce((acc, name, index) => {
-  acc[name] = index;
-  return acc;
-}, {} as Record<TabName, number>);
+export const TAB: Record<TabName, number> = TAB_NAMES.reduce(
+  (acc, name, index) => {
+    acc[name] = index;
+    return acc;
+  },
+  {} as Record<TabName, number>,
+);
 
 export const POLL_INTERVAL_MS = 1000;
