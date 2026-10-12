@@ -42,50 +42,52 @@ const snapshot: MonitorSnapshot = {
 };
 
 describe('TABS', () => {
-  test('names are unique and in sidebar order', () => {
+  test('names are unique and in tab-bar order', () => {
     const names = TABS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names).toEqual([
-      'Dashboard',
-      'Logs',
-      'Relay',
-      'Runs',
-      'Needs input',
-      'Completed',
-      'Failed',
-    ]);
+    expect(names).toEqual(['Overview', 'Runs', 'Logs', 'Relay']);
   });
 
-  test('sidebar counts come from the summary', () => {
+  test('the Runs count is active runs (running + queued), and only it has one', () => {
     const counts = Object.fromEntries(TABS.map((t) => [t.name, t.count?.(snapshot) ?? null]));
-    expect(counts).toEqual({
-      Dashboard: null,
-      Logs: null,
-      Relay: null,
-      Runs: '2/1',
-      'Needs input': '5',
-      Completed: '3',
-      Failed: '4',
-    });
+    expect(counts).toEqual({ Overview: null, Runs: '3', Logs: null, Relay: null });
   });
 
-  test('Needs input shows no count when nothing is waiting', () => {
-    const empty = {
+  test('Runs shows no count when nothing is active, and flags runs waiting for an answer', () => {
+    const idle = {
       ...snapshot,
-      summary: { ...snapshot.summary, counts: { ...snapshot.summary.counts, needs_input: 0 } },
+      summary: {
+        ...snapshot.summary,
+        counts: { ...snapshot.summary.counts, running: 0, pending: 0 },
+      },
     };
-    expect(TABS.find((t) => t.name === 'Needs input')?.count?.(empty)).toBeNull();
+    const runs = TABS.find((t) => t.name === 'Runs')!;
+    expect(runs.count?.(idle)).toBeNull();
+    expect(runs.alert?.(snapshot)).toBe(5);
+    expect(TABS.filter((t) => t.alert).map((t) => t.name)).toEqual(['Runs']);
   });
 
   test('every tab can produce copy text', () => {
     for (const tab of TABS) expect(typeof tab.text(snapshot)).toBe('string');
   });
 
-  test('copy text carries the run details and the reason for failed / needs-input runs', () => {
+  test('every tab documents its keys', () => {
+    expect(TABS.find((t) => t.name === 'Runs')!.hints.map(([key]) => key)).toEqual([
+      '↑↓',
+      '⏎',
+      'f',
+    ]);
+    expect(TABS.find((t) => t.name === 'Logs')!.hints.map(([key]) => key)).toEqual([
+      'l',
+      'f',
+      '↑↓',
+    ]);
+  });
+
+  test('fallback copy text carries the run details and the overview mappings', () => {
     const text = (name: string) => TABS.find((t) => t.name === name)!.text(snapshot);
-    expect(text('Failed')).toBe('repo-a\tDLA-1\tFix the thing\timplement\n  boom');
-    expect(text('Needs input')).toContain('Stop rule: which token?');
-    expect(text('Runs')).toContain('queued');
-    expect(text('Dashboard')).toContain('agent-implement -> /implement');
+    expect(text('Runs')).toContain('Question:\nStop rule: which token?');
+    expect(text('Runs')).toContain('Error:\nboom');
+    expect(text('Overview')).toContain('agent-implement -> /implement');
   });
 });

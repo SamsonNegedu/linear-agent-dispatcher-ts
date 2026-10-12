@@ -57,17 +57,22 @@ See the [relay README](services/relay-service/README.md) for details.
 
 ## Monitor TUI
 
-A terminal dashboard (`packages/monitor-tui`, built with Bun + React + [OpenTUI](https://github.com/anomalyco/opentui)) for watching dispatcher runs — dashboard (repos, label → skill with ✓/✗), live logs, relay connection management, and run tabs: active/queued, **needs input** (the agent stopped to ask), completed and failed.
+A terminal dashboard (`packages/monitor-tui`, built with Bun + React + [OpenTUI](https://github.com/anomalyco/opentui)) with four views: **Overview** (run counts, relay status, each repo's label → skill with ✓/✗), **Runs** (every run, filterable, with a detail pane showing the full title, error or question), **Logs** (colored by level, filterable, follow or pause) and **Relay** (connection and credentials). It adapts to the terminal width.
 
 `pnpm dev:up` opens it automatically; `cd services/dispatcher-service && pnpm monitor` starts it against a dispatcher it launches itself.
 
-| Key            | Action                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| `↑↓` / `1`–`7` | Switch tab                                                                               |
-| `y`            | Copy the selection, or the current tab, to the system clipboard                          |
-| `m`            | Toggle mouse capture (off lets the terminal select text; on gives wheel scrolling)       |
-| `Ctrl+R`       | Restart the dispatcher server in place (only when started via `pnpm monitor` / `dev:up`) |
-| `q` / `Ctrl+C` | Quit                                                                                     |
+| Key                     | Action                                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `1`–`4`, `Tab`, `←` `→` | Switch view                                                                              |
+| `↑` `↓` (or `j` `k`)    | Runs: select a run · Logs: scroll                                                        |
+| `⏎` / `Esc`             | Runs: open / close the detail pane                                                       |
+| `f`                     | Runs: cycle the filter (All, Active, Needs input, Failed, Done) · Logs: follow           |
+| `l`                     | Logs: cycle the level (All, Warnings+, Errors)                                           |
+| `c` / `u`               | Relay: connect / update endpoint                                                         |
+| `y`                     | Copy the selection, or the open run / current view, to the system clipboard              |
+| `m`                     | Toggle mouse capture (off lets the terminal select text; on gives wheel scroll)          |
+| `Ctrl+R`                | Restart the dispatcher server in place (only when started via `pnpm monitor` / `dev:up`) |
+| `q` / `Ctrl+C`          | Quit                                                                                     |
 
 ## Security
 

@@ -111,7 +111,7 @@ text is untrusted input.
 `Stop rule:`. The dispatcher records such a run as `needs_input` (a terminal status
 distinct from `succeeded` and `failed`), posts the reply on the Linear issue as an
 "Action required" comment (an elicitation for agent sessions), and logs
-`[NEEDS_ATTENTION]`. The monitor TUI lists these runs under **Needs input**. The
+`[NEEDS_ATTENTION]`. The monitor TUI shows them in the Runs view (filter: Needs input) and flags the tab. The
 answer is given on the issue and the run re-triggered; the dispatcher does not resume
 it. The duplicate-run window applies as usual.
 

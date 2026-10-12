@@ -59,15 +59,19 @@ On a Linear issue, set the repo's label (e.g. `api`) plus one mode label (e.g. `
 
 ## 4. The monitor TUI
 
-Tabs: Dashboard (repos and each label's skill, ✓/✗), Logs, Relay, Runs, **Needs input**, Completed, Failed. The header shows live counts and relay status.
+Four views: **Overview** (counts, relay status, each repo's label → skill with ✓/✗), **Runs**, **Logs** and **Relay**. The header shows live counts; a runs tab marker `●1` means a run is waiting for your answer.
 
-| Key            | Action                                                                             |
-| -------------- | ---------------------------------------------------------------------------------- |
-| `↑↓` / `1`–`7` | Switch tab                                                                         |
-| `y`            | Copy the selection, or the whole tab, to the clipboard                             |
-| `m`            | Toggle mouse capture (off: select text with the mouse and Cmd+C; on: wheel scroll) |
-| `Ctrl+R`       | Restart the dispatcher server in place; the TUI stays up                           |
-| `q` / `Ctrl+C` | Quit and stop everything                                                           |
+| Key                       | Action                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| `1`–`4` / `Tab` / `←` `→` | Switch view                                                                                       |
+| `↑` `↓` (or `j` `k`)      | Runs: select a run · Logs: scroll                                                                 |
+| `⏎` / `Esc`               | Runs: open / close the detail pane (full title, error or question)                                |
+| `f`                       | Runs: cycle the filter · Logs: follow or pause                                                    |
+| `l`                       | Logs: cycle the level (All, Warnings+, Errors)                                                    |
+| `y`                       | Copy the selection, or the open run / current view, to the clipboard                              |
+| `m`                       | Toggle mouse capture (off: select text with the mouse and Cmd+C; on: wheel scroll and click tabs) |
+| `Ctrl+R`                  | Restart the dispatcher server in place; the TUI stays up                                          |
+| `q` / `Ctrl+C`            | Quit and stop everything                                                                          |
 
 ## 5. Check it works
 
@@ -90,7 +94,7 @@ The repo's `.claude/settings.json` still applies on top, including its `deny` ru
 
 ## When a run needs your input
 
-A run is one non-interactive turn, so an agent can't ask a question and wait. A skill that must ask ends its reply with `Stop rule: <reason>`; the dispatcher then marks the run **needs input** (not "succeeded"), posts the question on the Linear issue as an "Action required" comment, and lists it under **Needs input** in the TUI. Answer on the issue, then re-trigger the run (for example by toggling the label). The duplicate-run window (`duplicateRunWindowMs`, default 60s) applies to the retry.
+A run is one non-interactive turn, so an agent can't ask a question and wait. A skill that must ask ends its reply with `Stop rule: <reason>`; the dispatcher then marks the run **needs input** (not "succeeded"), posts the question on the Linear issue as an "Action required" comment, and lists it in the TUI's Runs view (filter: Needs input). Answer on the issue, then re-trigger the run (for example by toggling the label). The duplicate-run window (`duplicateRunWindowMs`, default 60s) applies to the retry.
 
 ## Troubleshooting
 

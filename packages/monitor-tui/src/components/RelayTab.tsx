@@ -81,7 +81,7 @@ export function RelayTab({
       style={{
         border: true,
         borderStyle: 'rounded',
-        borderColor: colors.accent,
+        borderColor: colors.border,
         flexDirection: 'column',
         flexGrow: 1,
         padding: 1,

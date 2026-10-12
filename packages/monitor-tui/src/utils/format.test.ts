@@ -62,3 +62,44 @@ describe('formatTime', () => {
     expect(formatTime(3_660_000)).toBe('1h 1m');
   });
 });
+
+import { ago, columnWidths, fit } from './format';
+
+describe('ago', () => {
+  test('uses the coarsest sensible unit', () => {
+    expect(ago(3_000)).toBe('just now');
+    expect(ago(42_000)).toBe('42s ago');
+    expect(ago(5 * 60_000)).toBe('5m ago');
+    expect(ago(3 * 3_600_000)).toBe('3h ago');
+    expect(ago(2 * 86_400_000)).toBe('2d ago');
+  });
+});
+
+describe('columnWidths', () => {
+  test('gives the flex column whatever the fixed columns and gaps leave', () => {
+    expect(columnWidths(100, [10, 'flex', 8])).toEqual([10, 78, 8]); // 100 - 18 - 2 gaps*2
+  });
+
+  test('never shrinks the flex column below its minimum', () => {
+    expect(columnWidths(20, [10, 'flex', 8], { minFlex: 12 })).toEqual([10, 12, 8]);
+  });
+
+  test('splits the space between several flex columns', () => {
+    expect(columnWidths(50, ['flex', 'flex'], { gap: 2 })).toEqual([24, 24]);
+  });
+});
+
+describe('fit', () => {
+  test('always yields exactly the requested width, so columns never drift', () => {
+    for (const text of [
+      'ab',
+      'exactly10!',
+      'much longer than the column',
+      '日本語テキストです',
+      '',
+    ]) {
+      expect(displayWidth(fit(text, 10))).toBe(10);
+    }
+    expect(fit('hello world', 6)).toBe('hello…');
+  });
+});

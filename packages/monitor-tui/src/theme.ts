@@ -11,6 +11,9 @@ export interface Palette {
   text: string;
   selectedBg: string;
   selectedFg: string;
+  // Panel outlines (quiet, so the accent can mean "focus") and the highlighted list row.
+  border: string;
+  rowSelected: string;
 }
 
 export const darkPalette: Palette = {
@@ -24,6 +27,8 @@ export const darkPalette: Palette = {
   text: '#E6E6E6',
   selectedBg: '#22D3EE',
   selectedFg: '#0B0F14',
+  border: '#3B4252',
+  rowSelected: '#1E3A47',
 };
 
 export const lightPalette: Palette = {
@@ -37,6 +42,8 @@ export const lightPalette: Palette = {
   text: '#1A1A1A',
   selectedBg: '#0E7490',
   selectedFg: '#FFFFFF',
+  border: '#C5CCD6',
+  rowSelected: '#D5ECF3',
 };
 
 export const statusColor = (palette: Palette, status: RunStatus): string => palette[status];
