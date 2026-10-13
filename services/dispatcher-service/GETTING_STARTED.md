@@ -18,11 +18,11 @@ pnpm dev:up        # from the repo root
 
 1. Starts a public tunnel (Tailscale Funnel, or Cloudflare)
 2. Starts the relay (SQLite, `services/relay-service/data/relay.db`) with the tunnel as its public URL
-3. Asks once for your Linear credentials (saved to `services/relay-service/.env.local`)
+3. Asks once for your Linear credentials (saved to the repo-root `.env.local`, shared by the relay and the dispatcher)
 4. Opens your browser to authorize Linear (first run only; saves `RELAY_SUBSCRIBER_SECRET`)
 5. Starts the dispatcher and opens the monitor TUI. Quit the TUI or press Ctrl-C to stop everything
 
-Credentials and the subscriber secret are written to `.env.local` files readable only by you (mode `0600`). Flags: `pnpm dev:up -- --reconnect` forces the Linear authorize step again.
+Credentials and the subscriber secret are written to the root `.env.local`, readable only by you (mode `0600`). Flags: `pnpm dev:up -- --reconnect` forces the Linear authorize step again.
 
 It prints the webhook and OAuth callback URLs to paste into your Linear app. Logs: `logs/relay.log`, `services/dispatcher-service/logs/server.log`.
 

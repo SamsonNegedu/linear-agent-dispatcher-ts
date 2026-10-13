@@ -14,8 +14,7 @@ import { startTunnel } from './lib/tunnel.mjs';
 const { readEnvFile: readEnv, updateEnvFile } = loadEnvFile();
 const relayDir = join(root, 'services/relay-service');
 const dispatcherDir = join(root, 'services/dispatcher-service');
-const relayEnvFile = join(relayDir, '.env.local');
-const dispatcherEnvFile = join(dispatcherDir, '.env.local');
+const envFile = join(root, '.env.local');
 const logsDir = join(root, 'logs');
 
 let tunnel = null;
@@ -36,17 +35,15 @@ const fail = (message) => {
 process.on('SIGINT', () => shutdown());
 process.on('SIGTERM', () => shutdown());
 
-// 1. Preflight: the claude CLI, and env files (created from the template, owner-only: they hold secrets)
+// 1. Preflight: the claude CLI, and the env file (created from the template, owner-only: it holds secrets)
 try {
   execFileSync('which', ['claude'], { stdio: 'ignore' });
 } catch {
   fail('Missing prerequisite: claude (the Claude CLI)');
 }
-for (const file of [relayEnvFile, dispatcherEnvFile]) {
-  if (!existsSync(file)) {
-    copyFileSync(join(root, '.env.example'), file);
-    chmodSync(file, 0o600);
-  }
+if (!existsSync(envFile)) {
+  copyFileSync(join(root, '.env.example'), envFile);
+  chmodSync(envFile, 0o600);
 }
 
 // Prompt once for any Linear credential that is missing or still a placeholder.
@@ -56,19 +53,19 @@ const credentials = [
   'LINEAR_WEBHOOK_SECRET',
 ];
 const missing = credentials.filter((key) => {
-  const value = readEnv(relayEnvFile)[key];
+  const value = readEnv(envFile)[key];
   return !value || value.startsWith('your_');
 });
 if (missing.length) {
-  console.log('Enter your Linear app credentials (saved to services/relay-service/.env.local):');
+  console.log('Enter your Linear app credentials (saved to .env.local):');
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   for (const key of missing)
-    updateEnvFile(relayEnvFile, { [key]: (await rl.question(`  ${key}: `)).trim() });
+    updateEnvFile(envFile, { [key]: (await rl.question(`  ${key}: `)).trim() });
   rl.close();
 }
 
 // 2. Tunnel
-const relayPort = process.env.RELAY_PORT || readEnv(relayEnvFile).PORT || '3001';
+const relayPort = process.env.RELAY_PORT || readEnv(envFile).RELAY_PORT || '3001';
 const relayUrl = `http://localhost:${relayPort}`;
 if (await isHttpUp(`${relayUrl}/`)) {
   fail(
@@ -79,7 +76,7 @@ console.log('Starting tunnel...');
 try {
   tunnel = await startTunnel({
     port: relayPort,
-    env: { ...readEnv(join(root, '.env')), ...process.env },
+    env: { ...readEnv(envFile), ...process.env },
     logFile: join(logsDir, 'tunnel.log'),
   });
 } catch (error) {
@@ -116,8 +113,8 @@ Set in your Linear app${tunnel.mode === 'quick' ? ' (changes every run; install 
 
 // 4. Linear connect (opens the browser). Needed when never connected, when the relay URL changed,
 // when the relay no longer knows the saved subscriber (e.g. its database was reset), or on --reconnect.
-const saved = readEnv(dispatcherEnvFile);
-const dispatcherPort = saved.PORT || '3000';
+const saved = readEnv(envFile);
+const dispatcherPort = saved.DISPATCHER_PORT || '3000';
 const subscriberKnown = async () =>
   Boolean(saved.RELAY_SUBSCRIBER_ID) &&
   (await fetch(`${relayUrl}/subscribers/${encodeURIComponent(saved.RELAY_SUBSCRIBER_ID)}`).then(

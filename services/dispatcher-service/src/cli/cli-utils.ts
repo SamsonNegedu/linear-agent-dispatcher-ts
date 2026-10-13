@@ -1,12 +1,12 @@
-import { join } from 'path';
+import { rootEnvFile } from '@linear-agent/env-file';
 import { parseArgs, type ParseArgsConfig } from 'util';
 import { errorMessage } from '../common/error-message';
 
 /** A failure whose message is the whole story (bad flags, missing file): no stack, exit 1. */
 export class CliError extends Error {}
 
-/** The dispatcher's local env file; CLIs run from services/dispatcher-service. */
-export const envFilePath = (): string => join(process.cwd(), '.env.local');
+/** The repo's single env file (`.env.local` at the workspace root). */
+export const envFilePath = (): string => rootEnvFile();
 
 /**
  * Parses `--flag=value` / `--flag value`. A leading bare `--` (what `pnpm script -- --flag`

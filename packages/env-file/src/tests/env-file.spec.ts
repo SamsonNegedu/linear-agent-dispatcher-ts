@@ -1,9 +1,16 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { formatValue, parseEnv, readEnvFile, updateEnvFile, upsertEnvVar } from '../env-file';
+import {
+  formatValue,
+  parseEnv,
+  readEnvFile,
+  rootEnvFile,
+  updateEnvFile,
+  upsertEnvVar,
+} from '../env-file';
 
 test('parseEnv reads plain, exported and spaced assignments and ignores comments', () => {
   const env = parseEnv('# comment\nA=1\nexport B = two\n\n  C=3  \n#D=4\n');
@@ -80,4 +87,19 @@ test('updateEnvFile creates the file readable only by its owner and keeps existi
 
 test('readEnvFile returns an empty object for a missing file', () => {
   assert.deepEqual(readEnvFile('/nonexistent/path/.env'), {});
+});
+
+test('rootEnvFile finds .env.local at the directory holding pnpm-workspace.yaml', () => {
+  const root = mkdtempSync(join(tmpdir(), 'env-root-'));
+  writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages: []\n');
+  const nested = join(root, 'services', 'relay-service');
+  mkdirSync(nested, { recursive: true });
+
+  assert.equal(rootEnvFile(nested), join(root, '.env.local'));
+});
+
+test('rootEnvFile falls back to the start directory when there is no workspace root', () => {
+  const lonely = mkdtempSync(join(tmpdir(), 'env-lonely-'));
+
+  assert.equal(rootEnvFile(lonely), join(lonely, '.env.local'));
 });

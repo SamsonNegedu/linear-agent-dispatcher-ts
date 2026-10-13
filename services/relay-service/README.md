@@ -19,7 +19,7 @@ From the repo root, `pnpm dev:up` does everything (tunnel, relay, Linear connect
 
 ```bash
 cd services/relay-service
-cp ../../.env.example .env.local   # fill in the LINEAR_* values
+cp ../../.env.example ../../.env.local   # repo-root file shared with the dispatcher; fill in the LINEAR_* values
 pnpm dev                           # listens on PORT (default 3001)
 ```
 
@@ -41,7 +41,7 @@ Housekeeping runs at startup and then daily: subscribers with no delivery or reg
 1. The dispatcher calls `GET /subscribers/auth/start?localEndpoint=...` and opens the returned Linear URL.
 2. The user authorizes; Linear redirects to `GET /callback`.
 3. The relay exchanges the code, looks up every team the user belongs to, and registers the dispatcher for **each of them under one secret**.
-4. The secret and subscriber id go back to the CLI, which saves `RELAY_SUBSCRIBER_SECRET` and `RELAY_SUBSCRIBER_ID` to `.env.local`.
+4. The secret and subscriber id go back to the CLI, which saves `RELAY_SUBSCRIBER_SECRET` and `RELAY_SUBSCRIBER_ID` to the repo-root `.env.local`.
 
 Moving a dispatcher to a new URL: `PATCH /subscribers` with `{ subscriberId, subscriberSecret, localEndpoint }`. The secret is required and checked; an unknown id and a wrong secret get the same 401, so ids can't be probed.
 

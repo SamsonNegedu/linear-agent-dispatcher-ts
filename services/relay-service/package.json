@@ -14,6 +14,7 @@
     ".": "./dist/services/relay-service/src/main.js"
   },
   "dependencies": {
+    "@linear-agent/env-file": "workspace:*",
     "@linear-agent/linear-client": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

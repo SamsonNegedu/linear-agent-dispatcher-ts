@@ -52,7 +52,7 @@ export const loadConfig = (): DispatcherConfig => {
       subscriberId: process.env.RELAY_SUBSCRIBER_ID,
     },
     server: {
-      port: parseInt(process.env.PORT || '3000', 10),
+      port: parseInt(process.env.PORT || process.env.DISPATCHER_PORT || '3000', 10),
       globalPrefix: '',
     },
     executor: {

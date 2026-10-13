@@ -21,7 +21,7 @@ separate terminals is easy to get wrong.
 `pnpm dev:up` runs `scripts/dev-up.mjs`. The script does these steps in order:
 
 1. Checks that the `claude` CLI is on the path. It creates each missing
-   `.env.local` from `.env.example` with mode `0600`.
+   the root `.env.local` from `.env.example` with mode `0600`.
 2. Starts the tunnel. It refuses to start if the relay port (default 3001) already
    answers HTTP.
 3. Starts the relay with `RELAY_BASE_URL` set to the tunnel URL. It waits up to
@@ -58,7 +58,7 @@ fixes.
 
 `dev-up.mjs` runs `pnpm connect-relay` when any of these is true:
 
-- The dispatcher's `.env.local` has no `RELAY_SUBSCRIBER_SECRET`.
+- The root `.env.local` has no `RELAY_SUBSCRIBER_SECRET`.
 - Its `RELAY_URL` differs from the current tunnel URL.
 - The relay does not know the saved `RELAY_SUBSCRIBER_ID` (for example, the
   database was reset).
@@ -68,10 +68,10 @@ Otherwise the script skips the browser step.
 
 ### Where credentials land
 
-- The script prompts for `LINEAR_OAUTH_CLIENT_ID`, `LINEAR_OAUTH_CLIENT_SECRET` and `LINEAR_WEBHOOK_SECRET` when one is missing or still a `your_` placeholder, and saves them to `services/relay-service/.env.local`.
+- The script prompts for `LINEAR_OAUTH_CLIENT_ID`, `LINEAR_OAUTH_CLIENT_SECRET` and `LINEAR_WEBHOOK_SECRET` when one is missing or still a `your_` placeholder, and saves them to the root `.env.local`.
 - `connect-relay` writes `RELAY_ENABLED`, `RELAY_SUBSCRIBER_SECRET`, `RELAY_URL`,
   `RELAY_DISPATCHER_URL` and (when the relay returns one) `RELAY_SUBSCRIBER_ID` to
-  `services/dispatcher-service/.env.local`.
+  the same root `.env.local`. One file serves the relay, the dispatcher, the CLIs and the TUI; `RELAY_PORT` and `DISPATCHER_PORT` replace `PORT` so the two services do not collide.
 - Both writes use `@linear-agent/env-file`, which saves files with mode `0600`.
 
 ### Retention can force a reconnect

@@ -6,13 +6,9 @@
 // gets a config snapshot frozen before .env.local was ever read, no matter
 // how many times the process is restarted.
 import * as dotenv from 'dotenv';
-import * as fs from 'fs';
-import * as path from 'path';
+import { rootEnvFile } from '@linear-agent/env-file';
 
-const envLocalPath = path.join(process.cwd(), '.env.local');
-dotenv.config({
-  path: fs.existsSync(envLocalPath) ? envLocalPath : path.join(process.cwd(), '.env'),
-});
+dotenv.config({ path: rootEnvFile() });
 
 import { Logger, INestApplication } from '@nestjs/common';
 import { bootstrapServer } from './bootstrap';

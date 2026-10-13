@@ -1,4 +1,5 @@
 import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from 'fs';
+import { dirname, join, resolve } from 'path';
 
 const ASSIGNMENT = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.*)$/;
 
@@ -91,4 +92,18 @@ export function updateEnvFile(path: string, variables: Record<string, string>): 
   let text = existsSync(path) ? readFileSync(path, 'utf-8') : '';
   for (const [key, value] of Object.entries(variables)) text = upsertEnvVar(text, key, value);
   writeEnvFile(path, text);
+}
+
+/**
+ * The repo's single env file: `.env.local` in the directory that holds `pnpm-workspace.yaml`,
+ * found by walking up from `startDir`. Falls back to `startDir` when no workspace root exists.
+ */
+export function rootEnvFile(startDir: string = process.cwd()): string {
+  let dir = resolve(startDir);
+  while (!existsSync(join(dir, 'pnpm-workspace.yaml'))) {
+    const parent = dirname(dir);
+    if (parent === dir) return join(resolve(startDir), '.env.local');
+    dir = parent;
+  }
+  return join(dir, '.env.local');
 }

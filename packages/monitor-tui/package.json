@@ -8,6 +8,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@linear-agent/env-file": "workspace:*",
     "@opentui/core": "^0.4.3",
     "@opentui/react": "^0.4.3",
     "dotenv": "^16.4.5",

@@ -6,7 +6,7 @@
 - NestJS: one module per feature, constructor injection.
 - Comments: match surrounding density.
 - Errors: surface, never swallow.
-- Secrets: `.env.local` mode `0600`, never committed.
+- Secrets: one root `.env.local`, mode `0600`, never committed.
 
 ## Testing
 - Tests are `*.spec.ts` in a `tests/` folder next to the code they cover (`src/foo/tests/foo.spec.ts`).

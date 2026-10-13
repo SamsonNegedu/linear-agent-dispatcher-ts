@@ -1,6 +1,6 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import dotenv from 'dotenv';
+import { rootEnvFile } from '@linear-agent/env-file';
 
 export const dispatcherDir = path.join(
   import.meta.dir,
@@ -11,8 +11,7 @@ export const dispatcherDir = path.join(
   'services',
   'dispatcher-service',
 );
-const envLocalPath = path.join(dispatcherDir, '.env.local');
-const envPath = fs.existsSync(envLocalPath) ? envLocalPath : path.join(dispatcherDir, '.env');
+const envPath = rootEnvFile(import.meta.dir);
 
 // `override: true` is required here: dotenv normally refuses to overwrite keys
 // already present in process.env, but this gets called again after
