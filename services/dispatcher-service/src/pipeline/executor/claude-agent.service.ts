@@ -1,5 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { spawn } from 'child_process';
+import { createWriteStream, mkdirSync } from 'fs';
+import { join } from 'path';
 import type { DispatcherConfig } from '../../config/config';
 import { MAX_ERROR_MESSAGE_LENGTH } from './constants';
 import { McpServerDiscoveryService } from './mcp-server-discovery.service';
@@ -24,14 +26,43 @@ export const isStopRuleReply = (text: string | undefined): boolean =>
 // How long after SIGTERM before escalating to SIGKILL.
 const SIGKILL_GRACE_MS = 10_000;
 
-// Field names are the Claude CLI's `--output-format json` schema (snake_case).
+// Field names are the Claude CLI's `result` event in `--output-format stream-json` (snake_case).
 interface ClaudeOutput {
+  type?: string;
   session_id?: string;
   result?: string;
   total_cost_usd?: number;
   stop_reason?: string;
   is_error?: boolean;
 }
+
+// One file per run, written live so `tail -f` shows progress. Never breaks the run.
+const openRunLog = (issueIdentifier: string, skill: string) => {
+  try {
+    const dir = join(process.cwd(), 'logs', 'runs');
+    mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = join(dir, `${issueIdentifier}__${skill}__${stamp}.log`);
+    const stream = createWriteStream(file, { flags: 'a' });
+    stream.on('error', () => undefined);
+    return { file, stream };
+  } catch {
+    return undefined;
+  }
+};
+
+const parseResultEvent = (stdout: string): ClaudeOutput | undefined => {
+  const lines = stdout.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const event = JSON.parse(lines[i]) as ClaudeOutput;
+      if (event.type === 'result') return event;
+    } catch {
+      // not a JSON line
+    }
+  }
+  return undefined;
+};
 
 @Injectable()
 export class ClaudeAgentService {
@@ -65,7 +96,7 @@ export class ClaudeAgentService {
       }
 
       args.push(prompt);
-      args.push('--output-format', 'json');
+      args.push('--output-format', 'stream-json', '--verbose');
       // Comma-joined into one value: --allowedTools is variadic and would otherwise
       // swallow any argument that follows it.
       if (allowRules.length > 0) args.push('--allowedTools', allowRules.join(','));
@@ -81,6 +112,8 @@ export class ClaudeAgentService {
         env,
       });
 
+      const runLog = openRunLog(issueIdentifier, skill);
+      if (runLog) this.logger.log(`Claude run log: ${runLog.file}`);
       let stdout = '';
       let stderr = '';
       let timeoutHandle: NodeJS.Timeout | null = null;
@@ -88,10 +121,12 @@ export class ClaudeAgentService {
 
       child.stdout?.on('data', (data: Buffer) => {
         stdout += data.toString();
+        runLog?.stream.write(data);
       });
 
       child.stderr?.on('data', (data: Buffer) => {
         stderr += data.toString();
+        runLog?.stream.write(data);
       });
 
       child.on('error', (error) => {
@@ -103,6 +138,7 @@ export class ClaudeAgentService {
       child.on('close', (code) => {
         if (timeoutHandle) clearTimeout(timeoutHandle);
         if (killEscalationHandle) clearTimeout(killEscalationHandle);
+        runLog?.stream.end();
 
         let sessionId: string | undefined;
         let resultText: string | undefined;
@@ -111,8 +147,8 @@ export class ClaudeAgentService {
         let isError = false;
 
         if (stdout) {
-          try {
-            const output = JSON.parse(stdout) as ClaudeOutput;
+          const output = parseResultEvent(stdout);
+          if (output) {
             sessionId = output.session_id;
             resultText = output.result;
             totalCostUSD = output.total_cost_usd;
@@ -120,8 +156,6 @@ export class ClaudeAgentService {
             if (isError) {
               errorSnippet = output.result;
             }
-          } catch {
-            // Not valid JSON, use stderr
           }
         }
 

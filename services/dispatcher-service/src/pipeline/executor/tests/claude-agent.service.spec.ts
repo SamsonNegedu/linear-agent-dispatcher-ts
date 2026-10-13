@@ -11,6 +11,11 @@ import type { DispatcherConfig } from '../../../config/config';
 import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 
 jest.mock('child_process');
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  mkdirSync: jest.fn(),
+  createWriteStream: jest.fn(() => ({ on: jest.fn(), write: jest.fn(), end: jest.fn() })),
+}));
 
 const mockSpawn = spawn as jest.Mock;
 
@@ -72,7 +77,15 @@ describe('ClaudeAgentService.spawn', () => {
     child.stdout.emit(
       'data',
       Buffer.from(
-        JSON.stringify({ session_id: 'sess_1', result: 'did the thing', total_cost_usd: 0.5 }),
+        [
+          JSON.stringify({ type: 'system' }),
+          JSON.stringify({
+            type: 'result',
+            session_id: 'sess_1',
+            result: 'did the thing',
+            total_cost_usd: 0.5,
+          }),
+        ].join('\n'),
       ),
     );
     child.emit('close', 0);
@@ -98,7 +111,8 @@ describe('ClaudeAgentService.spawn', () => {
       '-p',
       '/implement ISSUE-1',
       '--output-format',
-      'json',
+      'stream-json',
+      '--verbose',
       '--allowedTools',
       'Read,Bash',
       '--permission-mode',
@@ -144,7 +158,8 @@ describe('ClaudeAgentService.spawn', () => {
       '-p',
       '/implement ISSUE-1',
       '--output-format',
-      'json',
+      'stream-json',
+      '--verbose',
     ]);
 
     child.emit('close', 0);
@@ -156,7 +171,10 @@ describe('ClaudeAgentService.spawn', () => {
     const resultPromise = service.spawn('implement', 'ISSUE-1', '/repos/repo-a');
     const reply = 'Stop rule: the issue conflicts with an RFC. I recommend option A.';
 
-    child.stdout.emit('data', Buffer.from(JSON.stringify({ session_id: 'sess_1', result: reply })));
+    child.stdout.emit(
+      'data',
+      Buffer.from(JSON.stringify({ type: 'result', session_id: 'sess_1', result: reply })),
+    );
     child.emit('close', 0);
 
     await expect(resultPromise).resolves.toMatchObject({
@@ -192,6 +210,7 @@ describe('ClaudeAgentService.spawn', () => {
       'data',
       Buffer.from(
         JSON.stringify({
+          type: 'result',
           session_id: 'sess_1',
           result: 'refused: ambiguous request',
           is_error: true,

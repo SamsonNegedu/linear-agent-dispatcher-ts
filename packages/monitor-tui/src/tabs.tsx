@@ -69,9 +69,11 @@ export const TABS: readonly Tab[] = [
   {
     name: 'Logs',
     hints: [
+      ['↑↓', 'select/scroll'],
+      ['⏎', 'open'],
+      ['esc', 'back'],
       ['l', 'level'],
       ['f', 'follow'],
-      ['↑↓', 'scroll'],
     ],
     view: ({ registerCopy }) => <LogsView registerCopy={registerCopy} />,
     text: () => readLogTail().join('\n'),

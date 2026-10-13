@@ -135,7 +135,7 @@ describe('App', () => {
     await ui.press('2');
     expect(await ui.frame()).toContain('Runs · filter: All');
     await ui.press('3');
-    expect(await ui.frame()).toContain('Logs · All');
+    expect(await ui.frame()).toContain('Server · All');
     await ui.press('4');
     expect(await ui.frame()).toContain('Relay Connection');
     ui.stop();
