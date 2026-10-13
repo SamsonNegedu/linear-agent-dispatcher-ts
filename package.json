@@ -22,10 +22,9 @@
     "dev:up": "node scripts/dev-up.mjs"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/uuid": "^9.0.0",
+    "@types/node": "^24.19.2",
     "oxfmt": "^0.72.0",
-    "oxlint": "^1.87.0",
+    "oxlint": "^1.88.0",
     "oxlint-tsgolint": "^7.0.2004",
     "typescript": "^5.7.0"
   }

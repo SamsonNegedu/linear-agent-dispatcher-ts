@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node --test dist/**/*.test.js"
+    "test": "node --test 'dist/**/*.spec.js'"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -15,10 +15,10 @@
     "./relay": "./dist/relay/index.js"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^24.19.2",
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   }
 }
