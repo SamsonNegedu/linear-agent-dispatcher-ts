@@ -7,6 +7,8 @@ import { RelayWebhookController } from './relay-webhook.controller';
 import { DispatcherService } from '../dispatcher/dispatcher.service';
 import { WebhookQueueService } from './webhook-queue.service';
 import { RelayHealthService } from './relay-health.service';
+import { WebhookRetentionService } from './webhook-retention.service';
+import { ProcessedWebhookEntity } from '../../store/typeorm/processed-webhook.entity';
 import { WebhookQueueEntity } from '../../store/typeorm/webhook-queue.entity';
 import { StoreModule } from '../../store/store.module';
 import { ExecutorModule } from '../executor/executor.module';
@@ -44,13 +46,14 @@ const dispatchAdapterRegistryProvider: Provider = {
     PreflightModule,
     StoreModule,
     ExecutorModule,
-    TypeOrmModule.forFeature([WebhookQueueEntity]),
+    TypeOrmModule.forFeature([WebhookQueueEntity, ProcessedWebhookEntity]),
   ],
   controllers: [RelayWebhookController],
   providers: [
     DispatcherService,
     WebhookQueueService,
     RelayHealthService,
+    WebhookRetentionService,
     issueContextResolverProvider,
     dispatchAdapterRegistryProvider,
   ],

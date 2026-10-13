@@ -2,6 +2,7 @@ import { Test, TestingModuleBuilder } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { RelayModule } from '../relay.module';
 import { StoreModule } from '../../../store/store.module';
+import { ProcessedWebhookEntity } from '../../../store/typeorm/processed-webhook.entity';
 import { WebhookQueueEntity } from '../../../store/typeorm/webhook-queue.entity';
 import { DispatcherConfigModule } from '../../../config/dispatcher-config.module';
 import { RoutingConfigService } from '../../../config/routing-config.service';
@@ -32,5 +33,7 @@ export function baseRelayModuleTestBuilder(
     .overrideProvider(RoutingConfigService)
     .useValue({ getAllRepositories: () => [] } as unknown as RoutingConfigService)
     .overrideProvider(getRepositoryToken(WebhookQueueEntity))
+    .useValue({})
+    .overrideProvider(getRepositoryToken(ProcessedWebhookEntity))
     .useValue({});
 }

@@ -1,3 +1,4 @@
+import { ActiveRunError } from '../../../store/store.errors';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WebhookQueueService } from '../webhook-queue.service';
@@ -73,12 +74,50 @@ describe('WebhookQueueService', () => {
   });
 
   it('silently returns without processing when the insert fails (duplicate idempotency key)', async () => {
-    queueRepository.insert.mockRejectedValue(new Error('UNIQUE constraint failed'));
+    queueRepository.insert.mockRejectedValue(
+      Object.assign(new Error('UNIQUE constraint failed'), {
+        driverError: { code: 'SQLITE_CONSTRAINT_UNIQUE' },
+      }),
+    );
 
     await service.enqueue(makeEvent());
 
     expect(queueRepository.findOne).not.toHaveBeenCalled();
     expect(dispatcherService.dispatchWebhook).not.toHaveBeenCalled();
+  });
+
+  it('rethrows an insert error that is not a unique-constraint violation', async () => {
+    queueRepository.insert.mockRejectedValue(
+      Object.assign(new Error('database or disk is full'), {
+        driverError: { code: 'SQLITE_FULL' },
+      }),
+    );
+
+    await expect(service.enqueue(makeEvent())).rejects.toThrow('database or disk is full');
+    expect(dispatcherService.dispatchWebhook).not.toHaveBeenCalled();
+  });
+
+  it('deletes the row instead of marking it failed when a policy rejection is thrown', async () => {
+    const event = makeEvent();
+    queueRepository.insert.mockResolvedValue({} as never);
+    queueRepository.findOne
+      .mockResolvedValueOnce({
+        id: 'row_1',
+        idempotencyKey: event.idempotencyKey,
+        payload: JSON.stringify(event),
+        status: 'queued',
+      } as never)
+      .mockResolvedValueOnce(null);
+    dispatcherService.dispatchWebhook.mockRejectedValue(new ActiveRunError('ISSUE-1'));
+
+    await service.enqueue(event);
+    await flushProcessing();
+
+    expect(queueRepository.delete).toHaveBeenCalledWith('row_1');
+    expect(queueRepository.update).not.toHaveBeenCalledWith(
+      'row_1',
+      expect.objectContaining({ status: 'failed' }),
+    );
   });
 
   it('marks a row failed when dispatch throws, and continues processing the next queued row', async () => {

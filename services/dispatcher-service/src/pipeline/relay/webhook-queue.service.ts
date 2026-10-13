@@ -6,6 +6,26 @@ import { DispatcherService } from '../dispatcher/dispatcher.service';
 import type { NormalizedEvent } from '@webhook-verify/core';
 import { randomUUID } from 'crypto';
 import { errorMessage } from '../../common/error-message';
+import {
+  ActiveRunError,
+  DuplicatePayloadError,
+  RecentDuplicateRunError,
+} from '../../store/store.errors';
+
+function isUniqueViolation(error: unknown): boolean {
+  const code =
+    (error as { driverError?: { code?: string }; code?: string })?.driverError?.code ??
+    (error as { code?: string })?.code;
+  return typeof code === 'string' && code.startsWith('SQLITE_CONSTRAINT');
+}
+
+function isPolicyRejection(error: unknown): boolean {
+  return (
+    error instanceof ActiveRunError ||
+    error instanceof RecentDuplicateRunError ||
+    error instanceof DuplicatePayloadError
+  );
+}
 
 @Injectable()
 export class WebhookQueueService implements OnModuleInit {
@@ -41,9 +61,10 @@ export class WebhookQueueService implements OnModuleInit {
       this.logger.debug(
         `webhook.queued issue=${payload.issueIdentifier} idempotencyKey=${idempotencyKey} webhookId=${webhookId} row=${id}`,
       );
-    } catch {
-      // Unique constraint violation on idempotencyKey: duplicate delivery, already queued or processing
-      // Silently return — the relay's duplicate will be handled by our unique constraint
+    } catch (error) {
+      // Only a unique-constraint violation on idempotencyKey means a duplicate delivery.
+      // Any other failure (disk full, locked database) must reach the caller.
+      if (!isUniqueViolation(error)) throw error;
       this.logger.debug(
         `webhook.duplicate issue=${payload.issueIdentifier} idempotencyKey=${idempotencyKey}`,
       );
@@ -80,6 +101,15 @@ export class WebhookQueueService implements OnModuleInit {
             `webhook.processed issue=${payload.issueIdentifier} idempotencyKey=${row.idempotencyKey} row=${row.id}`,
           );
         } catch (error) {
+          // Policy rejection (active run, duplicate): an expected outcome with nothing to
+          // retry or inspect. Delete the row so it does not block its key as a failure.
+          if (isPolicyRejection(error)) {
+            await this.queueRepository.delete(row.id);
+            this.logger.warn(
+              `webhook.rejected issue=${payload.issueIdentifier} idempotencyKey=${row.idempotencyKey} row=${row.id} reason="${errorMessage(error)}"`,
+            );
+            continue;
+          }
           // Failure: mark as failed (no retry, since dispatchWebhook already posted error feedback to Linear)
           const message = errorMessage(error);
           await this.queueRepository.update(row.id, {
