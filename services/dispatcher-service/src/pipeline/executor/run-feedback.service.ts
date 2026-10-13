@@ -24,12 +24,16 @@ interface Message {
 @Injectable()
 export class RunFeedbackService {
   private readonly logger = new Logger(RunFeedbackService.name);
-  private readonly linear: LinearGraphQLClient | null;
+  // Linear accepts agent-session activities only from the app's OAuth token, and issue comments
+  // from either credential, so each falls back to the other when only one is configured.
+  private readonly activityClient: LinearGraphQLClient | null;
+  private readonly commentClient: LinearGraphQLClient | null;
 
   constructor(@Inject('DispatcherConfig') config: DispatcherConfig) {
-    this.linear = config.linear.apiKey
-      ? new LinearGraphQLClient(config.linear.apiKey, this.logger)
-      : null;
+    const { apiKey, agentToken } = config.linear;
+    const build = (key?: string) => (key ? new LinearGraphQLClient(key, this.logger) : null);
+    this.activityClient = build(agentToken ?? apiKey);
+    this.commentClient = build(apiKey ?? agentToken);
   }
 
   started(
@@ -85,15 +89,16 @@ export class RunFeedbackService {
 
   private async send(target: FeedbackTarget, { activity, tag, body }: Message): Promise<void> {
     if (!target.sessionId && !target.issueId) return;
-    if (!this.linear) {
+    const client = target.sessionId ? this.activityClient : this.commentClient;
+    if (!client) {
       this.logger.warn(`${tag} Skipped: LINEAR_API_KEY not configured`);
       return;
     }
 
     try {
       const result = target.sessionId
-        ? await this.linear.createActivity(target.sessionId, activity, body)
-        : await this.linear.createComment(target.issueId!, body);
+        ? await client.createActivity(target.sessionId, activity, body)
+        : await client.createComment(target.issueId!, body);
       this.logger.log(`${tag} Posted ${target.sessionId ? 'activity' : 'comment'}: ${result.id}`);
     } catch (error) {
       this.logger.error(`${tag} Failed to post: ${errorMessage(error)}`);

@@ -27,7 +27,10 @@ export interface DispatcherConfig {
     logging: boolean;
   };
   linear: {
+    /** Personal API key (lin_api_...): issue comments and issue lookups. */
     apiKey?: string;
+    /** App OAuth token (lin_oauth_...): agent-session activities, which Linear rejects for personal keys. */
+    agentToken?: string;
   };
   preflight: {
     skip: boolean;
@@ -75,6 +78,7 @@ export const loadConfig = (): DispatcherConfig => {
     },
     linear: {
       apiKey: process.env.LINEAR_API_KEY,
+      agentToken: process.env.LINEAR_AGENT_TOKEN,
     },
     preflight: {
       skip: process.env.PREFLIGHT_SKIP === '1',

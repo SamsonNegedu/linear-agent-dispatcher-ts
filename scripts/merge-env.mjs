@@ -17,7 +17,13 @@ const sources = [
   join(root, 'services/dispatcher-service/.env.local'),
 ];
 // Left over from the removed AWS/DynamoDB setup and the removed admin API; ports are now RELAY_PORT/DISPATCHER_PORT.
-const dropped = new Set(['RELAY_TABLE_NAME', 'DYNAMODB_ENDPOINT', 'DYNAMODB_REGION', 'ADMIN_API_TOKEN', 'NODE_ENV']);
+const dropped = new Set([
+  'RELAY_TABLE_NAME',
+  'DYNAMODB_ENDPOINT',
+  'DYNAMODB_REGION',
+  'ADMIN_API_TOKEN',
+  'NODE_ENV',
+]);
 
 const merged = {};
 const notes = [];
@@ -28,14 +34,9 @@ for (const file of sources.filter(existsSync)) {
     if (dropped.has(key)) continue;
     let name = key;
     if (key === 'PORT') name = isRelay ? 'RELAY_PORT' : 'DISPATCHER_PORT';
-    if (key === 'LINEAR_API_KEY' && merged[key] !== undefined && merged[key] !== value) {
-      // Both services had a key. Prefer a personal key (lin_api_), which works for every call.
-      if (!value.startsWith('lin_api_')) {
-        notes.push('LINEAR_API_KEY differed: kept the lin_api_ key');
-        continue;
-      }
-      notes.push('LINEAR_API_KEY differed: kept the lin_api_ key');
-    }
+    // An OAuth token (lin_oauth_) is the app's credential for agent-session activity; a personal
+    // key (lin_api_) cannot post it. Keep them under separate names.
+    if (key === 'LINEAR_API_KEY' && value.startsWith('lin_oauth_')) name = 'LINEAR_AGENT_TOKEN';
     merged[name] = value;
   }
 }
@@ -46,7 +47,12 @@ if (existing.trim()) {
   console.error(`${target} already exists and is not empty; refusing to overwrite.`);
   process.exit(1);
 }
-writeFileSync(target, Object.entries(merged).map(([k, v]) => `${k}=${quote(v)}`).join('\n') + '\n');
+writeFileSync(
+  target,
+  Object.entries(merged)
+    .map(([k, v]) => `${k}=${quote(v)}`)
+    .join('\n') + '\n',
+);
 chmodSync(target, 0o600);
 console.log(`Wrote ${target} (mode 0600) with ${Object.keys(merged).length} keys:`);
 console.log('  ' + Object.keys(merged).join(', '));

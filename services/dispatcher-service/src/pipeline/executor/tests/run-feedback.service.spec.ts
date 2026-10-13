@@ -14,17 +14,17 @@ const MockedLinearGraphQLClient = LinearGraphQLClient as jest.MockedClass<
   typeof LinearGraphQLClient
 >;
 
-const makeConfig = (apiKey?: string): DispatcherConfig =>
-  makeDispatcherConfig({ linear: { apiKey } });
+const makeConfig = (apiKey?: string, agentToken?: string): DispatcherConfig =>
+  makeDispatcherConfig({ linear: { apiKey, agentToken } });
 
-async function buildService(apiKey?: string): Promise<RunFeedbackService> {
+async function buildService(apiKey?: string, agentToken?: string): Promise<RunFeedbackService> {
   const module = await Test.createTestingModule({
     imports: [ExecutorModule, DispatcherConfigModule],
   })
     .overrideModule(StoreModule)
     .useModule(FakeStoreModule)
     .overrideProvider('DispatcherConfig')
-    .useValue(makeConfig(apiKey))
+    .useValue(makeConfig(apiKey, agentToken))
     .compile();
 
   return module.get(RunFeedbackService);
@@ -79,6 +79,26 @@ describe('RunFeedbackService', () => {
 
     expect(createActivity).not.toHaveBeenCalled();
     expect(createComment).not.toHaveBeenCalled();
+  });
+
+  it('posts session activity with the agent token and comments with the API key', async () => {
+    const byKey: Record<string, { createActivity: jest.Mock; createComment: jest.Mock }> = {};
+    MockedLinearGraphQLClient.mockImplementation((key: string) => {
+      byKey[key] = {
+        createActivity: jest.fn().mockResolvedValue({ id: 'activity_1' }),
+        createComment: jest.fn().mockResolvedValue({ id: 'comment_1' }),
+      };
+      return byKey[key] as unknown as LinearGraphQLClient;
+    });
+    const service = await buildService('lin_api_personal', 'lin_oauth_app');
+
+    await service.needsInput({ issueId: 'issue_1', sessionId: 'session_1' }, 'x');
+    await service.needsInput({ issueId: 'issue_1' }, 'y');
+
+    expect(byKey['lin_oauth_app'].createActivity).toHaveBeenCalledTimes(1);
+    expect(byKey['lin_oauth_app'].createComment).not.toHaveBeenCalled();
+    expect(byKey['lin_api_personal'].createComment).toHaveBeenCalledTimes(1);
+    expect(byKey['lin_api_personal'].createActivity).not.toHaveBeenCalled();
   });
 
   it('posts an issue comment when there is no session', async () => {
