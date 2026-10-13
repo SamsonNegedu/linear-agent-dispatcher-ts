@@ -56,6 +56,7 @@ describe('DispatcherService.dispatchWebhook', () => {
       shouldDispatch: jest.fn(),
       resolveRouting: jest.fn(),
       postFeedback: jest.fn(),
+      postSkipped: jest.fn(),
     };
     issueContextResolver = {
       resolveIssueContext: jest.fn(),
@@ -212,6 +213,10 @@ describe('DispatcherService.dispatchWebhook', () => {
     await expect(service.dispatchWebhook(event)).rejects.toThrow(ActiveRunError);
 
     expect(dispatchAdapter.postFeedback).not.toHaveBeenCalled();
+    expect(dispatchAdapter.postSkipped).toHaveBeenCalledWith(
+      event,
+      expect.stringContaining('already in progress'),
+    );
   });
 
   it('posts feedback and rethrows on an unexpected error', async () => {

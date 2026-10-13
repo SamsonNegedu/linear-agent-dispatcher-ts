@@ -73,6 +73,16 @@ export class RunFeedbackService {
     });
   }
 
+  /**
+   * Closes an agent session that did not start a run because one is already in progress.
+   * Without any activity Linear shows the session as "Agent didn't start". Silent for
+   * plain issue comments, where a second comment would only be noise.
+   */
+  skipped(target: FeedbackTarget, message: string): Promise<void> {
+    if (!target.sessionId) return Promise.resolve();
+    return this.send(target, { activity: 'response', tag: '[SKIPPED]', body: message });
+  }
+
   private async send(target: FeedbackTarget, { activity, tag, body }: Message): Promise<void> {
     if (!target.sessionId && !target.issueId) return;
     if (!this.linear) {

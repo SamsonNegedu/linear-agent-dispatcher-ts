@@ -85,10 +85,15 @@ export class DispatcherService {
       // Policy rejection: the store deliberately declined to enqueue this run
       // (another run is active, or one just completed for the same
       // issue/domain/skill). Not a bug, and a comment on the issue would only
-      // be noise next to the run that is already there.
+      // be noise next to the run that is already there. An agent session still
+      // gets one activity, or Linear shows it as "Agent didn't start".
       if (error instanceof ActiveRunError || error instanceof RecentDuplicateRunError) {
         this.logger.log(
           `[ACTION_SKIPPED] Run rejected by policy for ${event.issueIdentifier}: ${error.message}`,
+        );
+        await dispatchAdapter.postSkipped?.(
+          event,
+          'A run is already in progress for this issue, so I did not start another. Its progress and result will appear on the issue.',
         );
         throw error;
       }

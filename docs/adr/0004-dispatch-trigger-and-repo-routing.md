@@ -235,7 +235,7 @@ fail label validation.
   paths or skills exist on disk. The preflight step below does that.
 - The run store allows one active run per issue. `enqueueRun` throws
   `ActiveRunError` if the issue already has a `running` run, and the
-  dispatcher logs the skip and posts no comment, because the running run is already visible on the issue. Runs on different
+  dispatcher logs the skip and posts no issue comment, because the running run is already visible on the issue. An agent session gets one closing response instead. Runs on different
   issues in the same repo are not serialized by the routing layer.
 
 ### Preflight Validation

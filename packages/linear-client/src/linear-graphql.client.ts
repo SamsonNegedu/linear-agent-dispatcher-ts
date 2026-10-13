@@ -26,7 +26,11 @@ export class LinearGraphQLClient {
     private readonly apiKey: string,
     private readonly logger?: LinearClientLogger,
   ) {
-    this.client = new LinearClient({ apiKey: this.apiKey });
+    // Personal API keys (lin_api_...) and OAuth access tokens (lin_oauth_...) authenticate
+    // differently; sending an OAuth token as an apiKey is rejected as "Authentication required".
+    this.client = apiKey.startsWith('lin_oauth_')
+      ? new LinearClient({ accessToken: apiKey })
+      : new LinearClient({ apiKey });
   }
 
   /**

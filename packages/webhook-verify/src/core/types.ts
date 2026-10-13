@@ -62,6 +62,8 @@ export interface DispatchAdapter {
   shouldDispatch(event: NormalizedEvent): DispatchDecision;
   resolveRouting(event: NormalizedEvent): RoutingDecision;
   postFeedback(event: NormalizedEvent, message: string): Promise<void>;
+  /** Tells an agent session that no run was started because one is already in progress. */
+  postSkipped?(event: NormalizedEvent, message: string): Promise<void>;
 }
 
 export interface ResolvedRouting {

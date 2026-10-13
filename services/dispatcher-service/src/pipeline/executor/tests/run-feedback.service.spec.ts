@@ -61,6 +61,26 @@ describe('RunFeedbackService', () => {
     expect(createComment).not.toHaveBeenCalled();
   });
 
+  it('closes an agent session with a response when a run was skipped', async () => {
+    const { createActivity, createComment } = mockLinear();
+    const service = await buildService('key_1');
+
+    await service.skipped({ issueId: 'issue_1', sessionId: 'session_1' }, 'already running');
+
+    expect(createActivity).toHaveBeenCalledWith('session_1', 'response', 'already running');
+    expect(createComment).not.toHaveBeenCalled();
+  });
+
+  it('posts nothing for a skipped run when there is no session', async () => {
+    const { createActivity, createComment } = mockLinear();
+    const service = await buildService('key_1');
+
+    await service.skipped({ issueId: 'issue_1' }, 'already running');
+
+    expect(createActivity).not.toHaveBeenCalled();
+    expect(createComment).not.toHaveBeenCalled();
+  });
+
   it('posts an issue comment when there is no session', async () => {
     const { createActivity, createComment } = mockLinear();
     const service = await buildService('key_1');

@@ -113,6 +113,11 @@ export class LinearDispatchAdapter implements DispatchAdapter {
     await this.feedback.needsInput({ issueId: event.issueId, sessionId: event.sessionId }, message);
   }
 
+  /** Closes the agent session, if any, when a run for the issue is already in progress. */
+  async postSkipped(event: NormalizedEvent, message: string): Promise<void> {
+    await this.feedback.skipped({ issueId: event.issueId, sessionId: event.sessionId }, message);
+  }
+
   private validateAndResolveDomainLabel(labels: string[]): {
     repoLabel?: string;
     repoPath?: string;
