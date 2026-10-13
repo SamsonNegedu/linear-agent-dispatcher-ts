@@ -76,6 +76,7 @@ describe('TABS', () => {
       '↑↓',
       '⏎',
       'f',
+      'x',
     ]);
     expect(TABS.find((t) => t.name === 'Logs')!.hints.map(([key]) => key)).toEqual([
       '↑↓',

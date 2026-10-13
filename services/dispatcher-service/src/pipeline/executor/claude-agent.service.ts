@@ -8,7 +8,7 @@ import { McpServerDiscoveryService } from './mcp-server-discovery.service';
 import { errorMessage } from '../../common/error-message';
 
 interface ClaudeSpawnResult {
-  status: 'succeeded' | 'failed' | 'needs_input';
+  status: 'succeeded' | 'failed' | 'needs_input' | 'cancelled';
   exitCode?: number;
   errorSnippet?: string;
   sessionId?: string;
@@ -67,6 +67,8 @@ const parseResultEvent = (stdout: string): ClaudeOutput | undefined => {
 @Injectable()
 export class ClaudeAgentService {
   private readonly logger = new Logger(ClaudeAgentService.name);
+  // Cancel handles for runs whose Claude process is alive, keyed by run id.
+  private readonly cancellers = new Map<string, () => void>();
 
   constructor(
     @Inject('DispatcherConfig') private readonly config: DispatcherConfig,
@@ -77,7 +79,7 @@ export class ClaudeAgentService {
     skill: string,
     issueIdentifier: string,
     repoPath: string,
-    options?: { resumeSessionId?: string },
+    options?: { resumeSessionId?: string; runId?: string },
   ): Promise<ClaudeSpawnResult> {
     this.logger.log(`Claude spawn: /${skill} for ${issueIdentifier} in ${repoPath}`);
 
@@ -118,6 +120,29 @@ export class ClaudeAgentService {
       let stderr = '';
       let timeoutHandle: NodeJS.Timeout | null = null;
       let killEscalationHandle: NodeJS.Timeout | null = null;
+      let cancelled = false;
+
+      // SIGTERM the whole process group, then SIGKILL if it ignores that. Same shape as the timeout.
+      const terminate = (reason: string) => {
+        this.logger.warn(
+          `Claude run ${reason}, sending SIGTERM: /${skill} for ${issueIdentifier} pid=${child.pid}`,
+        );
+        this.killProcessGroup(child.pid, 'SIGTERM');
+        killEscalationHandle = setTimeout(() => {
+          this.logger.error(
+            `Claude run still alive ${SIGKILL_GRACE_MS}ms after SIGTERM, sending SIGKILL: /${skill} for ${issueIdentifier} pid=${child.pid}`,
+          );
+          this.killProcessGroup(child.pid, 'SIGKILL');
+        }, SIGKILL_GRACE_MS);
+      };
+      const runId = options?.runId;
+      if (runId) {
+        this.cancellers.set(runId, () => {
+          cancelled = true;
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          terminate('cancelled by user');
+        });
+      }
 
       child.stdout?.on('data', (data: Buffer) => {
         stdout += data.toString();
@@ -130,12 +155,14 @@ export class ClaudeAgentService {
       });
 
       child.on('error', (error) => {
+        if (runId) this.cancellers.delete(runId);
         if (timeoutHandle) clearTimeout(timeoutHandle);
         if (killEscalationHandle) clearTimeout(killEscalationHandle);
         reject(error);
       });
 
       child.on('close', (code) => {
+        if (runId) this.cancellers.delete(runId);
         if (timeoutHandle) clearTimeout(timeoutHandle);
         if (killEscalationHandle) clearTimeout(killEscalationHandle);
         runLog?.stream.end();
@@ -163,6 +190,12 @@ export class ClaudeAgentService {
           // Raw stderr: the actual error is usually last, so keep the end (curated messages
           // posted to Linear lead with the point and keep the start instead).
           errorSnippet = stderr.slice(-MAX_ERROR_MESSAGE_LENGTH);
+        }
+
+        if (cancelled) {
+          this.logger.warn(`Claude spawn cancelled: /${skill} for ${issueIdentifier}`);
+          resolve({ status: 'cancelled', exitCode: code ?? undefined, sessionId, totalCostUSD });
+          return;
         }
 
         if (code === 0 && !isError && isStopRuleReply(resultText)) {
@@ -219,6 +252,15 @@ export class ClaudeAgentService {
         }, this.config.executor.timeout);
       }
     });
+  }
+
+  /** Stops the live Claude process for a run. False when the run has no live process. */
+  cancel(runId: string): boolean {
+    const cancel = this.cancellers.get(runId);
+    if (!cancel) return false;
+    this.cancellers.delete(runId);
+    cancel();
+    return true;
   }
 
   /**

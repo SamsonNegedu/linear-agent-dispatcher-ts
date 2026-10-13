@@ -68,6 +68,14 @@ export class RunFeedbackService {
     });
   }
 
+  cancelled(target: FeedbackTarget): Promise<void> {
+    return this.send(target, {
+      activity: 'response',
+      tag: '[CANCELLED]',
+      body: '**Run cancelled** from the dispatcher monitor.',
+    });
+  }
+
   /** Something the user must fix or answer: missing labels, a stopped run's question. */
   needsInput(target: FeedbackTarget, message: string): Promise<void> {
     return this.send(target, {

@@ -71,6 +71,19 @@ describe('RunFeedbackService', () => {
     expect(createComment).not.toHaveBeenCalled();
   });
 
+  it('posts a response to the session when a run is cancelled', async () => {
+    const { createActivity } = mockLinear();
+    const service = await buildService('key_1');
+
+    await service.cancelled({ issueId: 'issue_1', sessionId: 'session_1' });
+
+    expect(createActivity).toHaveBeenCalledWith(
+      'session_1',
+      'response',
+      expect.stringContaining('cancelled'),
+    );
+  });
+
   it('posts nothing for a skipped run when there is no session', async () => {
     const { createActivity, createComment } = mockLinear();
     const service = await buildService('key_1');

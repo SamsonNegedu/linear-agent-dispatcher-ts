@@ -21,6 +21,7 @@ export const STATUS_LABEL: Record<RunStatus, string> = {
   needs_input: 'INPUT',
   failed: 'FAILED',
   succeeded: 'DONE',
+  cancelled: 'STOPPED',
 };
 
 const FILTER_STATUSES: Record<RunFilter, readonly RunStatus[] | null> = {
@@ -28,7 +29,7 @@ const FILTER_STATUSES: Record<RunFilter, readonly RunStatus[] | null> = {
   active: ['running', 'pending'],
   needs_input: ['needs_input'],
   failed: ['failed'],
-  done: ['succeeded'],
+  done: ['succeeded', 'cancelled'],
 };
 
 /** Every run in the snapshot, most urgent first: running, queued, needs input, failed, done. */

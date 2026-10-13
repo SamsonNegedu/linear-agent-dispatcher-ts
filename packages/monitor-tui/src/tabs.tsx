@@ -57,6 +57,7 @@ export const TABS: readonly Tab[] = [
       ['↑↓', 'select'],
       ['⏎', 'details'],
       ['f', 'filter'],
+      ['x', 'stop run'],
     ],
     view: ({ snapshot, registerCopy }) => (
       <RunsView snapshot={snapshot} registerCopy={registerCopy} />

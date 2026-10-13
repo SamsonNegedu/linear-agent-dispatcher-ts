@@ -50,6 +50,12 @@ such as the double-delivery bug fixed in
 second real run. The value comes from the `policy` block of
 `routing.config.json`.
 
+### A running run can be stopped from the monitor
+
+`POST /monitor/runs/:id/cancel` asks `ExecutorService.cancelRun` to stop a `running` run. `ClaudeAgentService` keeps a cancel handle for each live Claude process, keyed by run ID. Cancelling sends SIGTERM to the process group, then SIGKILL after the same 10-second grace as the timeout. When the process exits, `executeRun` records the run as `cancelled` and tells the user ("Run cancelled"). The endpoint answers 202 while the process is stopping, 404 for an unknown run, and 409 when the run is not running (finished, or queued with no process yet).
+
+The monitor TUI offers this on the Runs view: `x` asks, a second `x` confirms. A cancelled run counts as done, not failed, and is not retried.
+
 ### Policy rejections and bugs use different log markers
 
 When the store declines to enqueue, the dispatcher logs `[ACTION_SKIPPED]` for

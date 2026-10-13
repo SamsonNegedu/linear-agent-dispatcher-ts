@@ -15,6 +15,14 @@ export class ExecutorService {
     private readonly feedback: RunFeedbackService,
   ) {}
 
+  /** Stops a running run. The run is marked cancelled once its process exits (see executeRun). */
+  async cancelRun(runId: string): Promise<'cancelling' | 'not_found' | 'not_running'> {
+    const run = await this.store.getRun(runId);
+    if (!run) return 'not_found';
+    if (run.status !== 'running' || !this.claudeAgent.cancel(runId)) return 'not_running';
+    return 'cancelling';
+  }
+
   async executeRun(runId: string, event: NormalizedEvent): Promise<void> {
     const run = await this.store.getRun(runId);
     if (!run) {
@@ -38,6 +46,7 @@ export class ExecutorService {
 
       const result = await this.claudeAgent.spawn(run.skill, event.issueIdentifier, run.repoPath, {
         resumeSessionId: run.claudeSessionId,
+        runId,
       });
 
       // Mark complete
@@ -50,6 +59,8 @@ export class ExecutorService {
 
       if (result.status === 'succeeded') {
         this.logger.log(`Run completed: ${runId} (${result.status})`);
+      } else if (result.status === 'cancelled') {
+        this.logger.warn(`Run cancelled: ${runId}`);
       } else if (result.status === 'needs_input') {
         this.logger.warn(`[NEEDS_ATTENTION] Run stopped to ask: ${runId} - ${result.errorSnippet}`);
       } else {
@@ -62,6 +73,8 @@ export class ExecutorService {
         `Claude skill \`/${run.skill}\` completed successfully in \`${run.domainLabel}\` repo`;
       if (result.status === 'succeeded') {
         await this.feedback.succeeded(target, summary);
+      } else if (result.status === 'cancelled') {
+        await this.feedback.cancelled(target);
       } else if (result.status === 'needs_input') {
         await this.feedback.needsInput(target, summary);
       } else {

@@ -205,6 +205,7 @@ export class TypeORMStoreRepository implements IStoreRepository {
       succeeded: 0,
       failed: 0,
       needs_input: 0,
+      cancelled: 0,
     };
 
     let lastWebhookAt: Date | null = null;

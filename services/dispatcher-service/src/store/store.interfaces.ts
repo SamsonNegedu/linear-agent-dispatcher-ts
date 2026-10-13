@@ -9,7 +9,8 @@ export interface Run {
   repoPath: string;
   skill: string;
   // needs_input: the agent stopped on purpose to ask a question (final reply starts with "Stop rule:")
-  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'needs_input';
+  // cancelled: stopped on purpose from the monitor before it finished
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'needs_input' | 'cancelled';
   claudeSessionId?: string;
   exitCode?: number;
   errorSnippet?: string;
@@ -41,7 +42,7 @@ export interface EnqueueRunInput {
 }
 
 export interface CompleteRunInput {
-  status: 'succeeded' | 'failed' | 'needs_input';
+  status: 'succeeded' | 'failed' | 'needs_input' | 'cancelled';
   claudeSessionId?: string;
   exitCode?: number;
   errorSnippet?: string;

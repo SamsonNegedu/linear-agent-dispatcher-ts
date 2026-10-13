@@ -249,6 +249,41 @@ describe('ClaudeAgentService.spawn', () => {
     );
   });
 
+  it('cancel() stops the process group and resolves the run as cancelled', async () => {
+    const service = await buildService({ timeout: 0 });
+    const killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const result = service.spawn('implement', 'ISSUE-1', '/repos/repo-a', { runId: 'run_1' });
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(service.cancel('run_1')).toBe(true);
+    expect(killSpy).toHaveBeenCalledWith(-1234, 'SIGTERM');
+    child.emit('close', null);
+
+    await expect(result).resolves.toMatchObject({ status: 'cancelled' });
+    expect(service.cancel('run_1')).toBe(false);
+    killSpy.mockRestore();
+  });
+
+  it('cancel() escalates to SIGKILL when the process ignores SIGTERM', async () => {
+    const service = await buildService({ timeout: 0 });
+    const killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);
+
+    void service.spawn('implement', 'ISSUE-1', '/repos/repo-a', { runId: 'run_1' });
+    await jest.advanceTimersByTimeAsync(0);
+    service.cancel('run_1');
+    jest.advanceTimersByTime(10_000);
+
+    expect(killSpy).toHaveBeenCalledWith(-1234, 'SIGKILL');
+    killSpy.mockRestore();
+  });
+
+  it('cancel() returns false for a run with no live process', async () => {
+    const service = await buildService();
+
+    expect(service.cancel('unknown')).toBe(false);
+  });
+
   it('sends SIGTERM to the process group after the configured timeout elapses', async () => {
     const service = await buildService({ timeout: 5000 });
     const killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);

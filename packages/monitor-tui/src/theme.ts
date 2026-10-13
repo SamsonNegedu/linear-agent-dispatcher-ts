@@ -1,4 +1,10 @@
-export type RunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'needs_input';
+export type RunStatus =
+  | 'pending'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'needs_input'
+  | 'cancelled';
 
 export interface Palette {
   pending: string;
@@ -6,6 +12,7 @@ export interface Palette {
   succeeded: string;
   failed: string;
   needs_input: string;
+  cancelled: string;
   muted: string;
   accent: string;
   text: string;
@@ -22,6 +29,7 @@ export const darkPalette: Palette = {
   succeeded: '#4ADE80',
   failed: '#FF6B6B',
   needs_input: '#FB923C',
+  cancelled: '#9CA3AF',
   muted: '#8A8F98',
   accent: '#22D3EE',
   text: '#E6E6E6',
@@ -37,6 +45,7 @@ export const lightPalette: Palette = {
   succeeded: '#16A34A',
   failed: '#DC2626',
   needs_input: '#C2410C',
+  cancelled: '#6B7280',
   muted: '#6B7280',
   accent: '#0E7490',
   text: '#1A1A1A',
