@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { LOG_MAX_LINES, LOG_TAIL_BYTES, readLogTail, stripAnsi, tailLines } from './logs';
+import { LOG_MAX_LINES, LOG_TAIL_BYTES, readLogTail, stripAnsi, tailLines } from '../logs';
 
 describe('stripAnsi', () => {
   test('removes colors, cursor moves, erase-line and OSC titles', () => {

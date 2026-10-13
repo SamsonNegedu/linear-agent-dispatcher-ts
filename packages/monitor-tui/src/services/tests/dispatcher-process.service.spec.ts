@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { restartDispatcherServer } from './dispatcher-process.service';
+import { restartDispatcherServer } from '../dispatcher-process.service';
 
 describe('restartDispatcherServer', () => {
   test('refuses, without signalling anything, when no supervisor identified itself', () => {

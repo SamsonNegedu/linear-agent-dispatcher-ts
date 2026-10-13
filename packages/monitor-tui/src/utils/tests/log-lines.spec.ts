@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { matchesLevel, nextLevelFilter, parseLogLine } from './log-lines';
+import { matchesLevel, nextLevelFilter, parseLogLine } from '../log-lines';
 
 describe('parseLogLine', () => {
   test('splits a Nest log line into time, level, context and message', () => {

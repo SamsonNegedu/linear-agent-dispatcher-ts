@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { signWebhookPayload, verifyWebhookSignature } from './index';
+import { signWebhookPayload, verifyWebhookSignature } from '../index';
 
 test('verifyWebhookSignature accepts what signWebhookPayload produced', () => {
   const signature = signWebhookPayload('{"x":1}', 'secret');

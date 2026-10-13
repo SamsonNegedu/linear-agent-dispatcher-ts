@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { safeEqual } from './safe-equal';
+import { safeEqual } from '../safe-equal';
 
 test('safeEqual accepts identical strings', () => {
   assert.equal(safeEqual('abc123', 'abc123'), true);

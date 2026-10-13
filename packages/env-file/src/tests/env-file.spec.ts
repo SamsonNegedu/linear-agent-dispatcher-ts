@@ -3,7 +3,7 @@ import * as assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { formatValue, parseEnv, readEnvFile, updateEnvFile, upsertEnvVar } from './env-file';
+import { formatValue, parseEnv, readEnvFile, updateEnvFile, upsertEnvVar } from '../env-file';
 
 test('parseEnv reads plain, exported and spaced assignments and ignores comments', () => {
   const env = parseEnv('# comment\nA=1\nexport B = two\n\n  C=3  \n#D=4\n');

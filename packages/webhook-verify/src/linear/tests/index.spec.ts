@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { parseLinearWebhook, shouldTriggerDispatch, isTerminalStateType } from './index';
+import { parseLinearWebhook, shouldTriggerDispatch, isTerminalStateType } from '../index';
 
 // Real Linear "Issue update" envelope (trimmed of PII/unused fields), captured
 // from a live webhook delivery where a label was REMOVED from TMB-8:
@@ -170,7 +170,7 @@ void test('shouldTriggerDispatch: always dispatches AgentSession events', () => 
 });
 
 import * as crypto from 'crypto';
-import { verifyLinearSignature } from './index';
+import { verifyLinearSignature } from '../index';
 
 test('verifyLinearSignature accepts a correct signature', () => {
   const body = Buffer.from('{"a":1}');

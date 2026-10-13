@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { MonitorSnapshot } from '../services/monitor-api.service';
-import type { Run } from '../types';
+import type { MonitorSnapshot } from '../../services/monitor-api.service';
+import type { Run } from '../../types';
 import {
   allRuns,
   filterCounts,
@@ -9,7 +9,7 @@ import {
   runAge,
   runDetailText,
   runDuration,
-} from './runs';
+} from '../runs';
 
 const run = (id: string, status: Run['status'], extra: Partial<Run> = {}): Run => ({
   id,

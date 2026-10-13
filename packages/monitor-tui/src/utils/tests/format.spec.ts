@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { displayWidth, formatTime, pad, truncate } from './format';
+import { displayWidth, formatTime, pad, truncate } from '../format';
 
 describe('displayWidth', () => {
   test('counts terminal cells, not characters', () => {
@@ -63,7 +63,7 @@ describe('formatTime', () => {
   });
 });
 
-import { ago, columnWidths, fit } from './format';
+import { ago, columnWidths, fit } from '../format';
 
 describe('ago', () => {
   test('uses the coarsest sensible unit', () => {

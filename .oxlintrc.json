@@ -41,7 +41,7 @@
   },
   "overrides": [
     {
-      "files": ["**/*.test.ts", "**/*.spec.ts", "**/test/**/*.ts"],
+      "files": ["**/*.spec.ts", "**/test/**/*.ts"],
       "rules": {
         "typescript/no-explicit-any": "off",
         // jest.Mocked<T> methods are plain jest.fn() mocks, not real bound methods, so

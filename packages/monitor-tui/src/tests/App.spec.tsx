@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import React from 'react';
 import { testRender } from '@opentui/react/test-utils';
-import { App } from './App';
-import { ThemeProvider } from './theme-context';
+import { App } from '../App';
+import { ThemeProvider } from '../theme-context';
 
 const run = (id: string, status: string, extra: Record<string, unknown> = {}) => ({
   id: `run_${id}`,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import type { MonitorSnapshot } from './services/monitor-api.service';
-import type { Run } from './types';
-import { TABS } from './tabs';
+import type { MonitorSnapshot } from '../services/monitor-api.service';
+import type { Run } from '../types';
+import { TABS } from '../tabs';
 
 const run = (overrides: Partial<Run> = {}): Run => ({
   id: 'run_1',
