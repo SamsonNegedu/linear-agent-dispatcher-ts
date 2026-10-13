@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { rootEnvFile } from '@linear-agent/env-file';
 import { DispatcherConfigModule } from './config/dispatcher-config.module';
 import { ConfigValidatorService } from './config/config-validator.service';
 import { RelayModule } from './pipeline/relay/relay.module';
@@ -11,7 +12,7 @@ import { MonitorModule } from './ops/monitor/monitor.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: rootEnvFile(),
     }),
     DispatcherConfigModule,
     PreflightModule,
