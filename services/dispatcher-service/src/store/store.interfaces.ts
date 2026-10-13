@@ -62,7 +62,7 @@ export interface IStoreRepository {
   hasActiveRun(provider: string, issueId: string): Promise<boolean>;
   markRunning(id: string, pgid?: number): Promise<void>;
   completeRun(id: string, out: CompleteRunInput): Promise<void>;
-  reconcileStaleRuns(olderThanMs: number): Promise<void>;
+  reconcileStaleRuns(olderThanMs: number, reason?: string): Promise<void>;
   ping(): Promise<void>;
   getRunStats(
     sinceMs: number,

@@ -164,7 +164,7 @@ export class TypeORMStoreRepository implements IStoreRepository {
     );
   }
 
-  async reconcileStaleRuns(olderThanMs: number): Promise<void> {
+  async reconcileStaleRuns(olderThanMs: number, reason?: string): Promise<void> {
     const cutoff = new Date(Date.now() - olderThanMs);
     const staleRuns = await this.runRepository.find({
       where: [
@@ -182,7 +182,9 @@ export class TypeORMStoreRepository implements IStoreRepository {
     for (const run of staleRuns) {
       await this.completeRun(run.id, {
         status: 'failed',
-        errorSnippet: `Stale run reconciliation: no heartbeat (${Math.round((Date.now() - run.startedAt.getTime()) / 1000)}s old)`,
+        errorSnippet:
+          reason ??
+          `Stale run reconciliation: no heartbeat (${Math.round((Date.now() - run.startedAt.getTime()) / 1000)}s old)`,
       });
     }
   }

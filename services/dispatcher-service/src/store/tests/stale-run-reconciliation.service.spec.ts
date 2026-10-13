@@ -22,11 +22,24 @@ describe('StaleRunReconciliationService', () => {
     jest.useRealTimers();
   });
 
-  it('sweeps for stale runs immediately using the configured executor timeout as the threshold', async () => {
+  it('fails every run left over from a previous process at startup, whatever its age', async () => {
     await service.onModuleInit();
 
-    expect(store.reconcileStaleRuns).toHaveBeenCalledWith(1_800_000);
+    expect(store.reconcileStaleRuns).toHaveBeenCalledWith(
+      expect.any(Number),
+      'Dispatcher restarted while the run was in progress',
+    );
+    expect(store.reconcileStaleRuns.mock.calls[0][0]).toBeLessThan(1000);
     expect(store.reconcileStaleRuns).toHaveBeenCalledTimes(1);
+  });
+
+  it('later sweeps use the configured executor timeout as the threshold', async () => {
+    await service.onModuleInit();
+
+    jest.advanceTimersByTime(5 * 60 * 1000);
+    await Promise.resolve();
+
+    expect(store.reconcileStaleRuns).toHaveBeenLastCalledWith(1_800_000);
   });
 
   it('sweeps again periodically while the module stays alive', async () => {

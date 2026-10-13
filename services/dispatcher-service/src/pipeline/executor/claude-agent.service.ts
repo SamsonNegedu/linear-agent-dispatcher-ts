@@ -1,5 +1,5 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
-import { spawn } from 'child_process';
+import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
+import { spawn, type ChildProcess } from 'child_process';
 import { createWriteStream, mkdirSync } from 'fs';
 import { join } from 'path';
 import type { DispatcherConfig } from '../../config/config';
@@ -65,10 +65,12 @@ const parseResultEvent = (stdout: string): ClaudeOutput | undefined => {
 };
 
 @Injectable()
-export class ClaudeAgentService {
+export class ClaudeAgentService implements OnModuleDestroy {
   private readonly logger = new Logger(ClaudeAgentService.name);
   // Cancel handles for runs whose Claude process is alive, keyed by run id.
   private readonly cancellers = new Map<string, () => void>();
+  // Every live Claude process, so shutdown can stop them (they run in their own process groups).
+  private readonly live = new Set<ChildProcess>();
 
   constructor(
     @Inject('DispatcherConfig') private readonly config: DispatcherConfig,
@@ -108,11 +110,15 @@ export class ClaudeAgentService {
 
       // No spawn() `timeout` option: it only signals the direct child. The timer below kills
       // the whole process group, which also reaches subprocesses Claude spawns.
+      // `detached` makes the child its own process-group leader. Without it, kill(-pid) matches
+      // no group, so the timeout and cancel signals never reach Claude or the tools it started.
       const child = spawn(this.config.executor.claudeBinPath, args, {
         cwd: repoPath,
         stdio: ['ignore', 'pipe', 'pipe'],
         env,
+        detached: true,
       });
+      this.live.add(child);
 
       const runLog = openRunLog(issueIdentifier, skill);
       if (runLog) this.logger.log(`Claude run log: ${runLog.file}`);
@@ -155,6 +161,7 @@ export class ClaudeAgentService {
       });
 
       child.on('error', (error) => {
+        this.live.delete(child);
         if (runId) this.cancellers.delete(runId);
         if (timeoutHandle) clearTimeout(timeoutHandle);
         if (killEscalationHandle) clearTimeout(killEscalationHandle);
@@ -162,6 +169,7 @@ export class ClaudeAgentService {
       });
 
       child.on('close', (code) => {
+        this.live.delete(child);
         if (runId) this.cancellers.delete(runId);
         if (timeoutHandle) clearTimeout(timeoutHandle);
         if (killEscalationHandle) clearTimeout(killEscalationHandle);
@@ -252,6 +260,11 @@ export class ClaudeAgentService {
         }, this.config.executor.timeout);
       }
     });
+  }
+
+  /** A detached Claude process outlives the dispatcher, so stop each one when the server stops. */
+  onModuleDestroy(): void {
+    for (const child of this.live) this.killProcessGroup(child.pid, 'SIGTERM');
   }
 
   /** Stops the live Claude process for a run. False when the run has no live process. */

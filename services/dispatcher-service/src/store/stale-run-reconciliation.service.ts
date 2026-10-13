@@ -24,6 +24,8 @@ const RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000;
 export class StaleRunReconciliationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StaleRunReconciliationService.name);
   private intervalHandle?: ReturnType<typeof setInterval>;
+  // Runs that started before this process did belong to a dispatcher that is gone.
+  private readonly bootedAt = Date.now();
 
   constructor(
     @Inject('IStoreRepository') private readonly store: IStoreRepository,
@@ -31,7 +33,10 @@ export class StaleRunReconciliationService implements OnModuleInit, OnModuleDest
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.reconcile();
+    await this.store.reconcileStaleRuns(
+      Date.now() - this.bootedAt,
+      'Dispatcher restarted while the run was in progress',
+    );
     this.intervalHandle = setInterval(() => {
       this.reconcile().catch((error) => {
         this.logger.error('Stale run reconciliation sweep failed:', error);

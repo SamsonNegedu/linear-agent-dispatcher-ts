@@ -64,10 +64,12 @@ designed, so the dispatcher posts no comment to the issue. When the webhook came
 
 ### Stale runs are reconciled on startup and every 5 minutes
 
-`StaleRunReconciliationService` calls `reconcileStaleRuns` on module init and
-every 5 minutes after. Any run stuck in `pending` or `running` for longer than
-`config.executor.timeout` becomes `failed`. This frees an issue blocked by a
-crash. The dispatcher runs continuously, so no external cron is needed.
+`StaleRunReconciliationService` runs two kinds of sweep.
+
+- **On startup,** every run still `pending` or `running` from before this process started becomes `failed` ("Dispatcher restarted while the run was in progress"). A new process owns no Claude process, so those runs are orphans, and without this an issue stays blocked by `ActiveRunError` until the run timeout passes.
+- **Every 5 minutes,** any run stuck for longer than `config.executor.timeout` becomes `failed`. This catches a hang without a restart.
+
+`ClaudeAgentService` starts each Claude process in its own process group (`detached`), so the timeout and cancel signals reach Claude and the tools it started. Because those processes no longer die with the dispatcher, the service sends SIGTERM to every live one when the server shuts down.
 
 ### A failed webhook is skipped, not retried
 

@@ -249,6 +249,31 @@ describe('ClaudeAgentService.spawn', () => {
     );
   });
 
+  it('starts Claude in its own process group so group signals reach it', async () => {
+    const service = await buildService();
+
+    void service.spawn('implement', 'ISSUE-1', '/repos/repo-a');
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'claude',
+      expect.anything(),
+      expect.objectContaining({ detached: true }),
+    );
+  });
+
+  it('stops live Claude processes when the server shuts down', async () => {
+    const service = await buildService({ timeout: 0 });
+    const killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);
+
+    void service.spawn('implement', 'ISSUE-1', '/repos/repo-a');
+    await jest.advanceTimersByTimeAsync(0);
+    service.onModuleDestroy();
+
+    expect(killSpy).toHaveBeenCalledWith(-1234, 'SIGTERM');
+    killSpy.mockRestore();
+  });
+
   it('cancel() stops the process group and resolves the run as cancelled', async () => {
     const service = await buildService({ timeout: 0 });
     const killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);
