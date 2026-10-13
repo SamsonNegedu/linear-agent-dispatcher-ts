@@ -54,7 +54,7 @@ second real run. The value comes from the `policy` block of
 
 When the store declines to enqueue, the dispatcher logs `[ACTION_SKIPPED]` for
 `ActiveRunError` and `RecentDuplicateRunError`. The system is working as
-designed. Only unexpected errors log `[NEEDS_ATTENTION]`.
+designed, so the dispatcher posts no comment to the issue. Only unexpected errors log `[NEEDS_ATTENTION]`.
 
 ### Stale runs are reconciled on startup and every 5 minutes
 

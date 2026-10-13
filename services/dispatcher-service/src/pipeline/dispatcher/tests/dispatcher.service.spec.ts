@@ -192,7 +192,7 @@ describe('DispatcherService.dispatchWebhook', () => {
     expect(dispatchAdapter.postFeedback).not.toHaveBeenCalled();
   });
 
-  it('posts feedback and rethrows when the store rejects the run as an active-run conflict', async () => {
+  it('rethrows without posting feedback when the store rejects the run as an active-run conflict', async () => {
     dispatchAdapter.shouldDispatch.mockReturnValue({
       shouldDispatch: true,
       reason: 'issue created',
@@ -211,10 +211,7 @@ describe('DispatcherService.dispatchWebhook', () => {
     const event = makeEvent();
     await expect(service.dispatchWebhook(event)).rejects.toThrow(ActiveRunError);
 
-    expect(dispatchAdapter.postFeedback).toHaveBeenCalledWith(
-      event,
-      expect.stringContaining('issue_1'),
-    );
+    expect(dispatchAdapter.postFeedback).not.toHaveBeenCalled();
   });
 
   it('posts feedback and rethrows on an unexpected error', async () => {

@@ -77,8 +77,19 @@ export class DispatcherService {
         this.logger.error(`Executor error for run ${run.id}:`, error);
       });
     } catch (error) {
-      // Skip elicitation feedback for duplicate payloads (already processed)
+      // Skip feedback for duplicate payloads (already processed)
       if (error instanceof DuplicatePayloadError) {
+        throw error;
+      }
+
+      // Policy rejection: the store deliberately declined to enqueue this run
+      // (another run is active, or one just completed for the same
+      // issue/domain/skill). Not a bug, and a comment on the issue would only
+      // be noise next to the run that is already there.
+      if (error instanceof ActiveRunError || error instanceof RecentDuplicateRunError) {
+        this.logger.log(
+          `[ACTION_SKIPPED] Run rejected by policy for ${event.issueIdentifier}: ${error.message}`,
+        );
         throw error;
       }
 
@@ -92,23 +103,14 @@ export class DispatcherService {
         return;
       }
 
-      // Distinguish expected outcomes (user-fixable, or a routine policy
-      // rejection) from unexpected bugs, so alerting/log-scanning on
-      // [NEEDS_ATTENTION] isn't polluted by conditions the system is
-      // deliberately enforcing.
+      // Distinguish expected outcomes (user-fixable) from unexpected bugs, so
+      // alerting/log-scanning on [NEEDS_ATTENTION] isn't polluted by
+      // conditions the system is deliberately enforcing.
       if (error instanceof ValidationError) {
         // Expected failure: user needs to fix labels/config
         // Already posting feedback below; log at INFO level with clear marker
         this.logger.log(
           `[ACTION_POSTED] Label validation failed for ${event.issueIdentifier}: ${error.message}`,
-        );
-      } else if (error instanceof ActiveRunError || error instanceof RecentDuplicateRunError) {
-        // Expected rejection: the store deliberately declined to enqueue this
-        // run (another run is already active, or one just completed for the
-        // same issue/domain/skill). Not a bug — already posting feedback
-        // below so the user knows why nothing happened.
-        this.logger.log(
-          `[ACTION_SKIPPED] Run rejected by policy for ${event.issueIdentifier}: ${error.message}`,
         );
       } else {
         // Unexpected failure: something is broken on the server
