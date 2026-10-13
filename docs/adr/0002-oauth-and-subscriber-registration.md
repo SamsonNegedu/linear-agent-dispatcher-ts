@@ -8,94 +8,80 @@ Accepted
 
 Local dispatchers need to:
 
-1. Prove they own/control a workspace to register with the relay
-2. Authenticate securely without sharing credentials with Linear
-3. Subscribe to webhook events for specific domains
+1. Prove they control a Linear workspace before the relay accepts them
+2. Authenticate without sharing credentials with Linear
+3. Receive webhook events for the teams of the user who registered them
 
 The relay needs to:
 
-1. Authorize registrations (only valid dispatchers can register)
-2. Manage per-dispatcher secrets for HMAC signing
-3. Track which teams/domains each dispatcher serves
+1. Accept registrations only from real Linear users
+2. Issue each dispatcher its own HMAC secret
+3. Track which teams each dispatcher serves
 
 ## Decision
 
-Implement a two-stage OAuth + HMAC flow:
+Use an OAuth flow for registration and per-dispatcher HMAC signing for delivery.
 
-### Stage 1: OAuth with Linear (Relay → Linear)
+### Stage 1: OAuth with Linear (relay and Linear)
 
-- Relay registers as a single OAuth app with Linear
-- Admin/user initiates registration from their local dispatcher
-- Relay redirects to Linear OAuth, user logs in, grants webhook scope
-- Linear returns authorization code to relay callback
-- Relay exchanges code for OAuth token, used immediately to fetch the user's
-  Linear team context (not persisted — see Implementation Notes)
+- The relay is the only OAuth app registered with Linear.
+- The operator runs `connect-relay` on the dispatcher machine. The CLI calls `GET /subscribers/auth/start` on the relay and opens the returned Linear authorization URL.
+- The user logs in to Linear and grants access. Linear redirects to the relay's `/callback` with an authorization code.
+- The relay exchanges the code for an OAuth token. It uses the token once, to fetch the user's id and teams. It does not store the token.
 
-### Stage 2: Dispatcher Registration (Dispatcher → Relay)
+### Stage 2: Subscriber registration (relay and dispatcher)
 
-- Dispatcher receives OAuth token from relay (via browser callback)
-- Dispatcher uses token to fetch Linear team context (team key, workspace info)
-- Dispatcher registers with relay, providing:
-  - team key (unique identifier from Linear)
-  - local endpoint URL (https://my-dispatcher.example.com)
-  - domain filters (which Linear issue domains to subscribe to)
-- Relay returns a `subscriberSecret` (HMAC key for this dispatcher)
-- Dispatcher stores secret securely for signature verification
+- The relay registers one subscriber for each of the user's Linear teams. All of them share the dispatcher's endpoint URL and one new `subscriberSecret`.
+- The relay redirects the browser to the CLI's local listener with the secret and the team list.
+- The CLI saves the secret and relay settings to `.env.local`.
 
-### Stage 3: Webhook Delivery (Relay → Dispatcher)
+### Stage 3: Webhook delivery (relay to dispatcher)
 
-- Relay receives Linear webhook (already signed by Linear with relay's key)
-- Relay verifies Linear signature (using OAuth token)
-- Relay looks up subscriber registry by domain/team
-- Relay signs webhook payload with subscriber's secret
-- Relay POST to dispatcher endpoint with HMAC-SHA256 signature header
-- Dispatcher verifies signature using stored secret
+- Linear signs each webhook with the relay's `LINEAR_WEBHOOK_SECRET`. The relay verifies that signature.
+- The relay looks up the subscribers for the event's team.
+- The relay signs the payload with each subscriber's secret (HMAC-SHA256) and POSTs it to the subscriber's endpoint with an `X-Relay-Signature` header.
+- The dispatcher verifies the signature with its stored secret.
 
 ## Consequences
 
 ### Positive
 
-- **OAuth isolation**: relay holds Linear credentials, not duplicated across dispatchers
-- **Per-dispatcher secrets**: compromising one dispatcher secret doesn't affect others
-- **Traceable**: relay knows exactly which dispatcher receives which webhook
-- **Revocable**: can disable a dispatcher without revoking Linear access
-- **User-friendly**: team admin does OAuth flow once, dispatchers auto-register
+- **OAuth isolation**: only the relay holds Linear credentials. Dispatchers never see them.
+- **Per-dispatcher secrets**: leaking one dispatcher's secret does not affect other dispatchers.
+- **Traceable**: the relay knows which dispatcher receives which webhook.
+- **Revocable**: the relay can drop a dispatcher without revoking Linear access.
+- **Simple for users**: one browser login registers every team the user belongs to.
 
 ### Negative
 
-- **Complexity**: three-stage flow with two secrets (OAuth token + HMAC key)
-- **Token rotation**: relay must handle OAuth token refresh
-- **Operator burden**: the operator must keep the relay's OAuth credentials and the subscriber secrets safe
+- **Complexity**: the flow has three stages and two kinds of secret (the Linear app credentials and the subscriber HMAC secret).
+- **No re-auth**: the relay keeps no OAuth token, so a user who loses their subscriber secret must run `connect-relay` again.
+- **Operator burden**: the operator must keep the relay's OAuth credentials and the subscriber secrets safe.
 
 ## Alternatives Considered
 
 ### Option A: Mutual TLS (mTLS) only
 
 - **Pros**: No OAuth needed, simpler
-- **Cons**: No way to know if dispatcher actually controls the Linear workspace; credential sprawl
+- **Cons**: Cannot show that a dispatcher controls the Linear workspace; credentials spread across machines
 
-### Option B: API key issued by relay admin
+### Option B: API key issued by a relay admin
 
 - **Pros**: Simpler than OAuth
-- **Cons**: No connection to Linear; hard to validate ownership; manual key management
+- **Cons**: No link to Linear, so ownership is hard to validate; keys must be managed by hand
 
-Each dispatcher running its own OAuth flow with Linear (instead of one
-relay-managed integration) isn't re-litigated here — that's the relay's
-existence itself, already decided and rejected in
-[ADR 0001](0001-relay-service-architecture.md#alternatives-considered).
+Having each dispatcher run its own OAuth flow with Linear is not re-decided here. That option is the case against having a relay at all, and
+[ADR 0001](0001-relay-service-architecture.md#alternatives-considered) already rejected it.
 
 ## Implementation Notes
 
-- Relay's Linear OAuth app credentials (`LINEAR_OAUTH_CLIENT_ID`/`_SECRET`) are
-  plain environment variables in a `.env.local` readable only by the owner — no rotation
-  mechanism exists. Acceptable at current scale; revisit if this ever moves
-  beyond a single-operator deployment.
-- Subscriber secret is a randomly generated 32+ byte key
-- Dispatcher stores secret in local environment (`.env.local`)
-- Callback URL: `{relay_url}/callback` — a top-level route, not nested under
-  `/subscribers`, so it can match whatever redirect URI is registered with
-  the Linear OAuth application regardless of API path structure
-- Registration happens only through the OAuth callback. An earlier unauthenticated `POST /subscribers/register` was removed: anyone who could reach the relay could register as, or overwrite, any team/user subscriber and receive their webhooks.
-- Changing a subscription's delivery URL (`PATCH /subscribers`) requires the subscriber's id **and** secret (compared in constant time). Subscriber ids are guessable (`<team>:<linearUserId>`), so they are identifiers, not credentials. An unknown id and a wrong secret get the same 401.
-- Delivery URLs must be `https://` to a public host (or `http://localhost`); private, loopback, link-local and cloud-metadata addresses are rejected so a registered URL can't point the relay at internal services. DNS names that resolve to private addresses are not checked.
-- Webhook delivery includes `X-Linear-Signature` (from Linear) and `X-Dispatcher-Signature` (from relay)
+- The relay's Linear OAuth app credentials (`LINEAR_OAUTH_CLIENT_ID` and `LINEAR_OAUTH_CLIENT_SECRET`) are plain environment variables, loaded from `.env` and `.env.local`. The relay has no way to rotate them. This is acceptable for a single-operator deployment. Revisit it if the relay serves more operators.
+- The OAuth request asks for Linear's `admin` scope.
+- The OAuth `state` is signed and expires. It carries the dispatcher endpoint, the optional CLI callback URL and the relay base URL.
+- The subscriber secret is 32 random bytes, hex-encoded.
+- `connect-relay` writes the secret to the dispatcher's `.env.local` as `RELAY_SUBSCRIBER_SECRET`, with `RELAY_ENABLED`, `RELAY_URL`, `RELAY_DISPATCHER_URL` and `RELAY_SUBSCRIBER_ID`.
+- The callback URL is `{relay_url}/callback`. It is a top-level route, not under `/subscribers`, so it can match whatever redirect URI is registered with the Linear OAuth app.
+- Registration happens only through the OAuth callback. An earlier unauthenticated `POST /subscribers/register` was removed. Anyone who could reach the relay could use it to register as, or overwrite, any team's subscriber and receive that team's webhooks.
+- `PATCH /subscribers` changes a subscriber's delivery URL. It requires the subscriber's id and secret, and compares the secret in constant time. Subscriber ids are guessable (`<team>:<linearUserId>`), so they identify a subscriber but do not authenticate one. An unknown id and a wrong secret both get the same 401.
+- Delivery URLs must be `https://` to a public host, or `http://localhost`. The relay rejects private, loopback and link-local addresses so a registered URL cannot point the relay at internal services. The relay does not check DNS names that resolve to private addresses.
+- Webhook delivery carries one signature header, `X-Relay-Signature`. The relay verifies Linear's own `linear-signature` header on the way in.

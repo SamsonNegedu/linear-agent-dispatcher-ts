@@ -6,27 +6,25 @@
 
 ## Context
 
-Each Linear team + person combination that connects a dispatcher gets a row
-in the relay's subscriber registry (`SUBSCRIBER#<subscriberId>`), holding the
-dispatcher's current webhook delivery URL (`localEndpoint`) and the HMAC
-secret used to sign deliveries to it. Re-running the OAuth connect flow (or
-`update-relay`) is the normal way a dispatcher's `localEndpoint` changes —
-most commonly because it's tunneled through a fresh ngrok URL after a
-restart.
+Each Linear team and person pair that connects a dispatcher gets one row in the
+relay's `subscribers` table (SQLite). The row holds the dispatcher's current
+webhook delivery URL (`localEndpoint`) and the HMAC secret that signs
+deliveries to that URL. The normal way to change `localEndpoint` is to re-run
+the OAuth connect flow or `update-relay`. This usually happens after a tunnel
+restart gives the dispatcher a fresh ngrok URL.
 
-The subscriber ID was derived from `(teamKey, linearUserId,
-sha256(localEndpoint))`. Re-registering the same person for the same team
-from a _new_ endpoint produced a brand-new subscriber ID rather than
-updating the existing row — even though `upsertSubscriber` itself already
-does correct overwrite-by-id semantics (look up by id, preserve
-`registeredAt`, bump `version`, overwrite the rest). Any two registrations
-for the same person/team from different endpoints — e.g. across an ngrok
-restart — leave two active subscriber rows behind, each with its own secret.
+The subscriber ID used to be derived from `(teamKey, linearUserId,
+sha256(localEndpoint))`. Registering the same person for the same team from a
+_new_ endpoint therefore created a new subscriber ID instead of updating the
+existing row. This happened even though `upsertSubscriber` already overwrites
+by ID (it looks up the ID, keeps `registeredAt`, bumps `version` and
+overwrites the other fields). Every endpoint change, such as an ngrok restart,
+left two active rows for one person, each with its own secret.
 
-The relay's fan-out queries all subscribers for a team and delivers to each,
-so every webhook is sent twice: once signed with whichever secret the
-dispatcher's `.env.local` currently holds (accepted), and once with the
-other, now-stale secret (rejected as `Invalid signature`).
+The relay's fan-out looks up the subscribers for a team and assignee and
+delivers to each row. Every webhook was therefore sent twice. The dispatcher
+accepted the copy signed with the secret in its `.env.local`. It rejected the
+copy signed with the stale secret as `Invalid signature`.
 
 ## Decision
 
@@ -38,40 +36,38 @@ export function buildSubscriberId(teamKey: string, linearUserId: string): string
 }
 ```
 
-One person has exactly one active subscription per team, regardless of how
-many machines or tunnel URLs they've registered from over time.
-`localEndpoint` is just "wherever to deliver next" — updating it via
-`upsertSubscriber` is the correct response to a changed endpoint, not
-creating a second identity.
+One person has exactly one active subscription per team, however many
+machines or tunnel URLs they register from over time. `localEndpoint` only
+says where to deliver next. When the endpoint changes, `upsertSubscriber`
+updates the existing row. It does not create a second identity.
 
 ## Consequences
 
 **Advantages:**
 
 - Re-registering (OAuth flow or `update-relay`) always updates the existing
-  row in place — no duplicate-delivery/signature-mismatch failure mode is
-  possible for this cause.
-- Removes a whole class of registry bloat (one stale-endpoint row per past
-  ngrok URL) without needing any cleanup/expiry mechanism.
+  row in place. An endpoint change can no longer cause duplicate delivery or
+  a signature mismatch.
+- The registry no longer collects one stale row per past ngrok URL, so no
+  cleanup or expiry job is needed.
 
 **Disadvantages:**
 
 - One person cannot run two independent dispatchers for the same team at the
-  same time (e.g., one on a laptop, one on a server) — the second
-  registration overwrites the first's endpoint and secret, silently cutting
-  the first off. Not a supported use case today; if it becomes one, the
-  identity would need a third, _explicit_ discriminator (e.g., a
-  user-chosen dispatcher name), not an incidental hash of the current
-  endpoint.
+  same time (for example, one on a laptop and one on a server). The second
+  registration overwrites the endpoint and secret of the first dispatcher and
+  silently cuts it off. The project does not support this today. If it must,
+  the identity needs a third, _explicit_ part, such as a dispatcher name the
+  user chooses, not a hash of the current endpoint.
 
 ## Alternatives Considered
 
 | Approach                                                               | Rejected because                                                                                                                                                                                            |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Keep endpoint-hashed ID, add TTL/reap-stale cleanup for orphaned rows  | Treats the symptom (registry bloat), not the cause (wrong identity key) — the double-delivery/signature-mismatch failure would still happen on every re-registration until the stale row eventually expired |
+| Keep the endpoint-hashed ID, add TTL or stale-row cleanup for orphaned rows | Treats the symptom (registry bloat), not the cause (wrong identity key). Double delivery and signature mismatch would still happen after every re-registration until the stale row expired |
 | Keep endpoint-hashed ID, add a `PUT /subscribers/keepalive` + reap job | Same as above, plus meaningfully more infrastructure (new endpoint, scheduled Lambda, schema field) for a problem the identity-key fix removes outright                                                     |
 
 ## References
 
-- [ADR 0002: OAuth and Subscriber Registration](0002-oauth-and-subscriber-registration.md) — registration flow this ID is used in
-- [ADR 0003: Webhook Routing and Delivery](0003-webhook-routing-and-delivery.md) — fan-out that double-delivered under the old ID scheme
+- [ADR 0002: OAuth and Subscriber Registration](0002-oauth-and-subscriber-registration.md) — the registration flow that uses this ID
+- [ADR 0003: Webhook Routing and Delivery](0003-webhook-routing-and-delivery.md) — the fan-out that delivered twice under the old ID scheme

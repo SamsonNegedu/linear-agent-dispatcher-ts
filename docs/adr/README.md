@@ -13,8 +13,10 @@ Read these to understand _why the system looks the way it does_.
 - **[ADR 0004: Webhook Dispatch — Trigger Semantics and Repository Routing](0004-dispatch-trigger-and-repo-routing.md)** — Whether a webhook should trigger a dispatch at all (the rule that stops the dispatcher's own comments from re-triggering itself), and if so, which repo + skill it routes to, the `routing.config.json` format (repos + exposed skills) and policy block, and startup preflight checks.
 - **[ADR 0005: Deterministic Subscriber Identity](0005-deterministic-subscriber-identity.md)** — Why a subscriber's ID excludes its delivery endpoint, and the duplicate-delivery bug that happens if it doesn't.
 - **[ADR 0006: Dispatcher Run Reliability](0006-dispatcher-run-reliability.md)** — What happens on failure, timeout, crash, a denied permission, or a question once a run is enqueued.
+- **[ADR 0007: Persisted Webhook Queue](0007-persisted-webhook-queue.md)** — How the dispatcher stores incoming deliveries, removes duplicates, drains them one at a time, and recovers after a restart.
+- **[ADR 0008: One-Command Local Startup](0008-one-command-local-startup.md)** — What `pnpm dev:up` starts, in what order, how the public tunnel is chosen, and where credentials are saved.
 
-That's the whole set — small enough to read start to finish for onboarding.
+That's the whole set, small enough to read start to finish for onboarding.
 
 ## Status Legend
 
@@ -25,7 +27,7 @@ That's the whole set — small enough to read start to finish for onboarding.
 
 ## How to Use This Repository
 
-1. **For onboarding**: Read all of them, in number order — there are only six.
+1. **For onboarding**: Read all of them, in number order.
 2. **For implementation**: Check the relevant ADR before building a feature that touches its area.
 3. **For decisions**: If changing a decision, update the relevant ADR and mark the old one as "Superseded". If a decision turns out to have never actually been implemented, don't leave it marked "Accepted" — downgrade to "Proposed", replace it with what's actually built, or remove it. An ADR that describes fictional behavior is worse than no ADR.
 4. **For debugging**: ADRs explain the "why" behind design choices; useful when troubleshooting.
