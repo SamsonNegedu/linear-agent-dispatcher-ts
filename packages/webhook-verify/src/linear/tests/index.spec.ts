@@ -266,3 +266,43 @@ test('parseLinearWebhook rejects malformed payloads with the offending paths, ne
     /agentSession\.issueId|organizationId/,
   );
 });
+
+test('replay timestamp is when Linear sent the delivery, while the idempotency key stays on the event time', () => {
+  const eventTime = '2026-10-11T10:00:00.000Z';
+  const sentAt = new Date('2026-10-11T11:00:05.000Z').getTime(); // a retry, an hour later
+
+  const session = parseLinearWebhook({
+    type: 'AgentSessionEvent',
+    action: 'created',
+    createdAt: eventTime,
+    webhookTimestamp: sentAt,
+    organizationId: 'org_1',
+    agentSession: { id: 'sess_1', issueId: 'issue_1' },
+  });
+  const issue = parseLinearWebhook({
+    webhookId: 'wh_1',
+    action: 'create',
+    createdAt: eventTime,
+    webhookTimestamp: sentAt,
+    organizationId: 'org_1',
+    data: { id: 'issue_1', team: { id: 'team_1', key: 'DLA' } },
+  });
+
+  for (const event of [session, issue]) {
+    assert.equal(event.timestamp, sentAt);
+    // The same event retried must keep the same key, so it still dedupes.
+    assert.ok(event.idempotencyKey.endsWith(`:${new Date(eventTime).getTime()}`));
+  }
+});
+
+test('replay timestamp falls back to the event time when Linear sends no webhookTimestamp', () => {
+  const event = parseLinearWebhook({
+    type: 'AgentSessionEvent',
+    action: 'created',
+    createdAt: '2026-10-11T10:00:00.000Z',
+    organizationId: 'org_1',
+    agentSession: { id: 'sess_1', issueId: 'issue_1' },
+  });
+
+  assert.equal(event.timestamp, new Date('2026-10-11T10:00:00.000Z').getTime());
+});

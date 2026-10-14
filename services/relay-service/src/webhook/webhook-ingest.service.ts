@@ -68,7 +68,9 @@ export class WebhookIngestService {
 
     // 3. Validate timestamp (prevent replay attacks)
     if (!validateTimestamp(webhook.timestamp)) {
-      this.logger.warn('Webhook timestamp outside acceptable window');
+      this.logger.warn(
+        `Webhook timestamp outside acceptable window: ${webhook.kind} ${webhook.action ?? ''} sent ${Math.round((Date.now() - webhook.timestamp) / 1000)}s ago`,
+      );
       throw new HttpException('Bad Request', HttpStatus.BAD_REQUEST);
     }
 
