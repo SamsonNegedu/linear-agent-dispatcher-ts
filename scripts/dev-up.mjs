@@ -64,6 +64,18 @@ if (missing.length) {
   rl.close();
 }
 
+// .env.local is the source of truth. Every child process would otherwise inherit a value exported
+// in this shell (say, from an old `source .env.local`) and let it override the file, which goes stale
+// when `connect-relay` rewrites a secret. Ports can still be set per run: `RELAY_PORT=4000 pnpm dev:up`.
+const SHELL_OVERRIDABLE = new Set(['PORT', 'RELAY_PORT', 'DISPATCHER_PORT']);
+for (const [key, value] of Object.entries(readEnv(envFile))) {
+  if (SHELL_OVERRIDABLE.has(key) || process.env[key] === undefined) continue;
+  if (process.env[key] !== value) {
+    console.warn(`Ignoring ${key} from your shell: it differs from .env.local, which wins.`);
+    delete process.env[key];
+  }
+}
+
 // 2. Tunnel
 const relayPort = process.env.RELAY_PORT || readEnv(envFile).RELAY_PORT || '3001';
 const relayUrl = `http://localhost:${relayPort}`;
