@@ -306,3 +306,37 @@ test('replay timestamp falls back to the event time when Linear sends no webhook
 
   assert.equal(event.timestamp, new Date('2026-10-11T10:00:00.000Z').getTime());
 });
+
+const delegateUpdate = (data: Record<string, unknown>, updatedFrom: Record<string, unknown>) =>
+  parseLinearWebhook({
+    webhookId: 'wh_1',
+    action: 'update',
+    createdAt: '2026-10-11T10:00:00.000Z',
+    organizationId: 'org_1',
+    updatedFrom,
+    data: { id: 'issue_1', identifier: 'DLA-1', team: { id: 'team_1', key: 'DLA' }, ...data },
+  });
+
+test('assigning a delegate is a reason to run', () => {
+  const event = delegateUpdate({ delegateId: 'agent_1' }, { delegateId: null });
+
+  assert.deepEqual(event.changedFields, ['delegateId']);
+  assert.equal(shouldTriggerDispatch(event).shouldDispatch, true);
+});
+
+test('removing the delegate is not a reason to run', () => {
+  const event = delegateUpdate({ delegateId: null }, { delegateId: 'agent_1' });
+
+  assert.deepEqual(event.changedFields, []);
+  assert.equal(shouldTriggerDispatch(event).shouldDispatch, false);
+});
+
+test('removing the delegate along with another change still runs for the other change', () => {
+  const event = delegateUpdate(
+    { delegateId: null, labelIds: ['l2'] },
+    { delegateId: 'agent_1', labelIds: ['l1'] },
+  );
+
+  assert.deepEqual(event.changedFields, ['labelIds']);
+  assert.equal(shouldTriggerDispatch(event).shouldDispatch, true);
+});

@@ -86,6 +86,9 @@ const issueEnvelope = z.object({
     teamId: z.string().optional(),
     team: z.object({ id: z.string().optional(), key: z.string().optional() }).nullish(),
     assignee: objectWithId,
+    // The agent the issue is delegated to; null once the delegate is removed.
+    delegateId: z.string().nullish(),
+    delegate: objectWithId,
     organization: objectWithId,
     state: z.object({ type: z.string().optional() }).nullish(),
     labels: z.array(label).catch([]),
@@ -148,7 +151,14 @@ const parseIssueWebhook = (payload: unknown): VerifiedEvent => {
   let changedFields: string[] | undefined;
   let labelChange: LabelChange | undefined;
   if (type === 'Issue') {
-    if (updatedFrom) changedFields = Object.keys(updatedFrom).filter((key) => key !== 'updatedAt');
+    // Taking the delegate off an issue is the user stopping the agent, not asking it to run, so it
+    // is not a change worth reacting to. Assigning (or changing) a delegate still is.
+    const delegateRemoved = !issue.delegateId && !issue.delegate?.id;
+    if (updatedFrom) {
+      changedFields = Object.keys(updatedFrom).filter(
+        (key) => key !== 'updatedAt' && !(key === 'delegateId' && delegateRemoved),
+      );
+    }
 
     // `updatedFrom` has only bare `labelIds`, so added label names come from diffing them
     // against the current labels.
