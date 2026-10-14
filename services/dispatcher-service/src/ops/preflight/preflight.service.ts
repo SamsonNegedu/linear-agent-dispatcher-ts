@@ -74,11 +74,12 @@ export class PreflightService implements OnModuleInit {
       }
     }
 
-    // 3. Check Linear API key if activities enabled
-    if (this.config.linear.apiKey) {
-      this.logger.log('Linear API key configured (activity posting enabled)');
+    // 3. Check Linear credentials if activities enabled
+    const { apiKey, agentToken, oauthClientId, oauthClientSecret } = this.config.linear;
+    if (apiKey || agentToken || (oauthClientId && oauthClientSecret)) {
+      this.logger.log('Linear credentials configured (activity posting enabled)');
     } else {
-      warnings.push('Linear API key not configured (activity posting will be skipped)');
+      warnings.push('Linear credentials not configured (activity posting will be skipped)');
     }
 
     // 4. Report

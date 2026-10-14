@@ -1,6 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { DispatcherConfig } from '../../config/config';
-import { ActivityType, LinearGraphQLClient } from '@linear-agent/linear-client';
+import {
+  ActivityType,
+  LinearGraphQLClient,
+  chooseAppCredential,
+  type TokenSource,
+} from '@linear-agent/linear-client';
 import { MAX_ERROR_MESSAGE_LENGTH } from './constants';
 import { errorMessage } from '../../common/error-message';
 import type { FeedbackTarget, RunReporter } from './run-reporter';
@@ -17,7 +22,7 @@ interface Message {
  * Linear outage cannot fail a run, and is skipped without LINEAR_API_KEY.
  */
 @Injectable()
-export class LinearRunReporter implements RunReporter {
+export class LinearRunReporter implements RunReporter, OnModuleInit {
   readonly provider = 'linear';
   private readonly logger = new Logger(LinearRunReporter.name);
   // Linear accepts agent-session activities only from the app's OAuth token, and issue comments
@@ -26,10 +31,37 @@ export class LinearRunReporter implements RunReporter {
   private readonly commentClient: LinearGraphQLClient | null;
 
   constructor(@Inject('DispatcherConfig') config: DispatcherConfig) {
-    const { apiKey, agentToken } = config.linear;
-    const build = (key?: string) => (key ? new LinearGraphQLClient(key, this.logger) : null);
-    this.activityClient = build(agentToken ?? apiKey);
-    this.commentClient = build(apiKey ?? agentToken);
+    const { apiKey, agentToken, oauthClientId, oauthClientSecret } = config.linear;
+    const build = (credential?: string | TokenSource) =>
+      credential ? new LinearGraphQLClient(credential, this.logger) : null;
+    // The app's client credentials (always current) beat a fixed agent token, which beats a personal key.
+    const app = chooseAppCredential({
+      oauthClientId,
+      oauthClientSecret,
+      agentToken,
+      apiKey,
+      logger: this.logger,
+    });
+    this.activityClient = build(app);
+    this.commentClient = build(apiKey ?? app);
+  }
+
+  /** Says at startup who activities will be posted as, so a wrong credential is not found mid-run. */
+  onModuleInit(): void {
+    const client = this.activityClient;
+    if (!client) return;
+    client.getViewer().then(
+      ({ name, app }) => {
+        if (app) this.logger.log(`Posting agent activity as the app user "${name}"`);
+        else
+          this.logger.warn(
+            `Agent activity would post as "${name}", not an app user, and Linear will reject it. ` +
+              `Set LINEAR_OAUTH_CLIENT_ID and LINEAR_OAUTH_CLIENT_SECRET so the app token is minted for you.`,
+          );
+      },
+      (error) =>
+        this.logger.warn(`Could not verify the Linear credentials: ${errorMessage(error)}`),
+    );
   }
 
   started(

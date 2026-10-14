@@ -3,7 +3,6 @@
   "workspaces": {
     ".": { "entry": ["scripts/*.mjs"] },
     "packages/*": { "entry": ["src/**/*.spec.ts"] },
-    "packages/linear-client": {},
     "services/dispatcher-service": {
       "entry": ["src/cli/*.ts", "src/**/*.spec.ts", "scripts/*.js"]
     },

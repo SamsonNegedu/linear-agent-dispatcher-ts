@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { LinearGraphQLClient } from '@linear-agent/linear-client';
+import { AppTokenProvider, LinearGraphQLClient } from '@linear-agent/linear-client';
 import { LinearRunReporter } from '../linear-run-reporter';
 import { ExecutorModule } from '../executor.module';
 import { FakeStoreModule } from '../../../test-utils/fake-store.module';
@@ -8,23 +8,32 @@ import { DispatcherConfigModule } from '../../../config/dispatcher-config.module
 import type { DispatcherConfig } from '../../../config/config';
 import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 
-jest.mock('@linear-agent/linear-client');
+// Only the client class is mocked: chooseAppCredential and AppTokenProvider stay real.
+jest.mock('@linear-agent/linear-client', () => ({
+  ...jest.requireActual('@linear-agent/linear-client'),
+  LinearGraphQLClient: jest.fn(),
+}));
 
 const MockedLinearGraphQLClient = LinearGraphQLClient as jest.MockedClass<
   typeof LinearGraphQLClient
 >;
 
-const makeConfig = (apiKey?: string, agentToken?: string): DispatcherConfig =>
-  makeDispatcherConfig({ linear: { apiKey, agentToken } });
+type LinearSettings = DispatcherConfig['linear'];
 
-async function buildService(apiKey?: string, agentToken?: string): Promise<LinearRunReporter> {
+const makeConfig = (linear: LinearSettings): DispatcherConfig => makeDispatcherConfig({ linear });
+
+async function buildService(
+  apiKey?: string,
+  agentToken?: string,
+  oauth: Pick<LinearSettings, 'oauthClientId' | 'oauthClientSecret'> = {},
+): Promise<LinearRunReporter> {
   const module = await Test.createTestingModule({
     imports: [ExecutorModule, DispatcherConfigModule],
   })
     .overrideModule(StoreModule)
     .useModule(FakeStoreModule)
     .overrideProvider('DispatcherConfig')
-    .useValue(makeConfig(apiKey, agentToken))
+    .useValue(makeConfig({ apiKey, agentToken, ...oauth }))
     .compile();
 
   return module.get(LinearRunReporter);
@@ -96,12 +105,12 @@ describe('LinearRunReporter', () => {
 
   it('posts session activity with the agent token and comments with the API key', async () => {
     const byKey: Record<string, { createActivity: jest.Mock; createComment: jest.Mock }> = {};
-    MockedLinearGraphQLClient.mockImplementation((key: string) => {
-      byKey[key] = {
+    MockedLinearGraphQLClient.mockImplementation((key) => {
+      byKey[key as string] = {
         createActivity: jest.fn().mockResolvedValue({ id: 'activity_1' }),
         createComment: jest.fn().mockResolvedValue({ id: 'comment_1' }),
       };
-      return byKey[key] as unknown as LinearGraphQLClient;
+      return byKey[key as string] as unknown as LinearGraphQLClient;
     });
     const service = await buildService('lin_api_personal', 'lin_oauth_app');
 
@@ -211,5 +220,38 @@ describe('LinearRunReporter', () => {
     await expect(
       service.started({ issueId: 'issue_1' }, { repoLabel: 'r', skill: 's', runId: 'x' }),
     ).resolves.toBeUndefined();
+  });
+  it('posts session activity with the app token it mints itself when client credentials are set', async () => {
+    const credentials: unknown[] = [];
+    MockedLinearGraphQLClient.mockImplementation((credential) => {
+      credentials.push(credential);
+      return {} as unknown as LinearGraphQLClient;
+    });
+
+    // A stale fixed agent token is ignored: the minted token is always current.
+    await buildService('lin_api_personal', 'lin_oauth_stale', {
+      oauthClientId: 'client_id',
+      oauthClientSecret: 'client_secret',
+    });
+
+    const [activity, comment] = credentials;
+    expect(activity).toBeInstanceOf(AppTokenProvider);
+    expect(comment).toBe('lin_api_personal');
+  });
+
+  it('comments as the app when there is no API key and client credentials are set', async () => {
+    const credentials: unknown[] = [];
+    MockedLinearGraphQLClient.mockImplementation((credential) => {
+      credentials.push(credential);
+      return {} as unknown as LinearGraphQLClient;
+    });
+
+    await buildService(undefined, undefined, {
+      oauthClientId: 'client_id',
+      oauthClientSecret: 'client_secret',
+    });
+
+    expect(credentials[0]).toBeInstanceOf(AppTokenProvider);
+    expect(credentials[1]).toBeInstanceOf(AppTokenProvider);
   });
 });

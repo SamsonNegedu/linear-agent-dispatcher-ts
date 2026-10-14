@@ -3,7 +3,7 @@ import { RelayDatabaseModule } from '../database/relay-database.module';
 import { AdapterRegistry } from '@webhook-verify/core';
 import type { WebhookIngestAdapter, RoutingResolver } from '@webhook-verify/core';
 import { LinearIngestAdapter } from '@webhook-verify/core/linear';
-import { LinearGraphQLClient } from '@linear-agent/linear-client';
+import { LinearGraphQLClient, chooseAppCredential } from '@linear-agent/linear-client';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
@@ -36,7 +36,9 @@ const routingResolverRegistryProvider: Provider = {
   provide: 'RoutingResolverRegistry',
   useFactory: (config: RelayServiceConfig) => {
     const registry = new AdapterRegistry<RoutingResolver>();
-    const client = config.linear.apiKey ? new LinearGraphQLClient(config.linear.apiKey) : null;
+    const { oauthClientId, oauthClientSecret, apiKey } = config.linear;
+    const credential = chooseAppCredential({ oauthClientId, oauthClientSecret, apiKey });
+    const client = credential ? new LinearGraphQLClient(credential) : null;
     registry.register(new LinearRoutingResolver(client));
     return registry;
   },

@@ -1,4 +1,5 @@
 import { LinearClient } from '@linear/sdk';
+import type { TokenSource } from './app-token-provider.js';
 import type {
   ActivityType,
   LinearUserInfo,
@@ -19,18 +20,51 @@ const MIN_LABEL_COUNT_FOR_FALLBACK = 2;
  * Shared Linear API client for both relay and dispatcher services.
  * Wraps @linear/sdk for issue/activity/comment operations used by webhook routing.
  */
-export class LinearGraphQLClient {
-  private readonly client: LinearClient;
+// An expired or revoked token surfaces as this SDK error type or message.
+const isAuthError = (error: unknown): boolean => {
+  const { type, message } = (error ?? {}) as { type?: string; message?: string };
+  return (
+    type === 'AuthenticationError' ||
+    /authentication required|not authenticated/i.test(message ?? '')
+  );
+};
 
+const newSdkClient = (token: string): LinearClient =>
+  // Personal API keys (lin_api_...) and OAuth access tokens (lin_oauth_...) authenticate
+  // differently; sending an OAuth token as an apiKey is rejected as "Authentication required".
+  token.startsWith('lin_oauth_')
+    ? new LinearClient({ accessToken: token })
+    : new LinearClient({ apiKey: token });
+
+export class LinearGraphQLClient {
+  private sdkClient?: { token: string; client: LinearClient };
+
+  /**
+   * `credential` is a fixed token or API key, or a TokenSource that supplies a current token for
+   * each request. With a TokenSource, a request rejected as unauthenticated is retried once on a
+   * fresh token.
+   */
   constructor(
-    private readonly apiKey: string,
+    private readonly credential: string | TokenSource,
     private readonly logger?: LinearClientLogger,
-  ) {
-    // Personal API keys (lin_api_...) and OAuth access tokens (lin_oauth_...) authenticate
-    // differently; sending an OAuth token as an apiKey is rejected as "Authentication required".
-    this.client = apiKey.startsWith('lin_oauth_')
-      ? new LinearClient({ accessToken: apiKey })
-      : new LinearClient({ apiKey });
+  ) {}
+
+  private async sdk(): Promise<LinearClient> {
+    const token =
+      typeof this.credential === 'string' ? this.credential : await this.credential.getToken();
+    if (this.sdkClient?.token !== token) this.sdkClient = { token, client: newSdkClient(token) };
+    return this.sdkClient.client;
+  }
+
+  private async call<T>(operation: (client: LinearClient) => Promise<T>): Promise<T> {
+    try {
+      return await operation(await this.sdk());
+    } catch (error) {
+      if (typeof this.credential === 'string' || !isAuthError(error)) throw error;
+      this.logger?.warn('Linear rejected the app token; fetching a new one and retrying once');
+      this.credential.invalidate();
+      return operation(await this.sdk());
+    }
   }
 
   /**
@@ -38,7 +72,7 @@ export class LinearGraphQLClient {
    * Used during OAuth flow in relay-service
    */
   async getUserInfo(accessToken: string): Promise<LinearUserInfo> {
-    const client = accessToken ? new LinearClient({ accessToken }) : this.client;
+    const client = accessToken ? new LinearClient({ accessToken }) : await this.sdk();
 
     const viewer = await client.viewer;
     if (!viewer?.id) {
@@ -62,6 +96,12 @@ export class LinearGraphQLClient {
     };
   }
 
+  /** Who these credentials act as. `app` is true for an app user, which agent sessions require. */
+  async getViewer(): Promise<{ name: string; app: boolean }> {
+    const viewer = await this.call((client) => client.viewer);
+    return { name: viewer.name, app: viewer.app };
+  }
+
   /**
    * Create an activity in a Linear agent session
    * Used by dispatcher-service for activity posting
@@ -76,10 +116,9 @@ export class LinearGraphQLClient {
     }
 
     try {
-      const response = await this.client.createAgentActivity({
-        agentSessionId,
-        content: { type, body },
-      });
+      const response = await this.call((client) =>
+        client.createAgentActivity({ agentSessionId, content: { type, body } }),
+      );
 
       if (!response.agentActivityId) {
         throw new Error('No activity ID returned from Linear API');
@@ -105,7 +144,7 @@ export class LinearGraphQLClient {
     }
 
     try {
-      const response = await this.client.createComment({ issueId, body });
+      const response = await this.call((client) => client.createComment({ issueId, body }));
 
       if (!response.commentId) {
         throw new Error('No comment ID returned from Linear API');
@@ -163,12 +202,10 @@ export class LinearGraphQLClient {
       throw new Error('issueId is required');
     }
 
-    const issue = await this.client.issue(issueId);
-    if (!issue) {
-      return {};
-    }
-
-    const [assignee, team] = await Promise.all([issue.assignee, issue.team]);
+    const { assignee, team } = await this.call(async (client) => {
+      const issue = await client.issue(issueId);
+      return { assignee: await issue?.assignee, team: await issue?.team };
+    });
 
     return {
       assigneeId: assignee?.id,
@@ -186,16 +223,16 @@ export class LinearGraphQLClient {
       throw new Error('issueId is required');
     }
 
-    const issue = await this.client.issue(issueId);
-    if (!issue) {
-      return { labels: [] };
-    }
+    return this.call(async (client) => {
+      const issue = await client.issue(issueId);
+      if (!issue) return { labels: [] };
 
-    const labelsConnection = await issue.labels();
-    const labelNames = labelsConnection.nodes
-      .map((label) => label.name)
-      .filter((name): name is string => !!name && typeof name === 'string');
+      const labelsConnection = await issue.labels();
+      const labelNames = labelsConnection.nodes
+        .map((label) => label.name)
+        .filter((name): name is string => !!name && typeof name === 'string');
 
-    return { labels: labelNames, identifier: issue.identifier };
+      return { labels: labelNames, identifier: issue.identifier };
+    });
   }
 }

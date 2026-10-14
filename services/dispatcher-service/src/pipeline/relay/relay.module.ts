@@ -1,6 +1,6 @@
 import { Module, Provider } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { LinearGraphQLClient } from '@linear-agent/linear-client';
+import { LinearGraphQLClient, chooseAppCredential } from '@linear-agent/linear-client';
 import { AdapterRegistry } from '@webhook-verify/core';
 import type { DispatchAdapter } from '@webhook-verify/core';
 import { RelayWebhookController } from './relay-webhook.controller';
@@ -29,7 +29,10 @@ const issueContextResolverRegistryProvider: Provider = {
   provide: ISSUE_CONTEXT_RESOLVER_REGISTRY,
   useFactory: (config: DispatcherConfig) => {
     const registry = new AdapterRegistry<IssueContextResolver>();
-    const client = config.linear.apiKey ? new LinearGraphQLClient(config.linear.apiKey) : null;
+    const { apiKey, agentToken, oauthClientId, oauthClientSecret } = config.linear;
+    const credential =
+      apiKey ?? chooseAppCredential({ oauthClientId, oauthClientSecret, agentToken });
+    const client = credential ? new LinearGraphQLClient(credential) : null;
     registry.register(new LinearIssueContextResolver(client));
     return registry;
   },
