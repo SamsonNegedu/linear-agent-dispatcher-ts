@@ -19,7 +19,8 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "dev:up": "node scripts/dev-up.mjs"
+    "dev:up": "node scripts/dev-up.mjs",
+    "doctor": "node scripts/doctor.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
