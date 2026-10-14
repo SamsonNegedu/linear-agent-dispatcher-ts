@@ -4,6 +4,8 @@
 
 Accepted
 
+**Amended:** 2026-10-14. The relay now answers Linear before it delivers to dispatchers (see "Delivery strategy").
+
 ## Context
 
 The relay receives Linear webhooks. For each webhook, the relay must:
@@ -17,7 +19,7 @@ One Linear workspace webhook can match several dispatchers, for example two deve
 
 ## Decision
 
-Deliver synchronously, never retry, and log every attempt.
+Answer Linear first, deliver to dispatchers in the background, never retry, and log every attempt.
 
 ### Routing logic
 
@@ -29,7 +31,8 @@ Deliver synchronously, never retry, and log every attempt.
 
 ### Delivery strategy
 
-- **Synchronous**: the relay posts the webhook to each subscriber before it answers Linear.
+- **Answer first**: once the signature, timestamp and organization checks pass, the relay answers `200` straight away and delivers in the background. Linear waits 5 seconds for an answer and then retries, and delivery can take longer than that: it may need a Linear lookup, then one HTTP call per subscriber.
+- **Drain on shutdown**: deliveries still running when the relay stops get up to 10 seconds to finish.
 - **Parallel**: the relay sends all requests at once with `Promise.all`.
 - **Timeout**: 5 seconds per subscriber, hardcoded in `WebhookService`. A slow dispatcher fails fast.
 - **Payload**: the relay forwards the parsed `NormalizedEvent` as JSON, not Linear's original body.
@@ -40,7 +43,7 @@ Deliver synchronously, never retry, and log every attempt.
 - **Deduplication**: the event carries an `idempotencyKey`, so a dispatcher can drop repeated deliveries.
 - **No retries**: the relay does not retry. If a dispatcher fails, the relay logs the failure and moves on.
 - **No queue**: the relay does not queue webhooks. A dispatcher that missed an event must re-fetch it from Linear.
-- **Always 200**: after Linear's signature, timestamp and organization checks pass, the relay answers `200` even when some deliveries fail. The response body reports how many succeeded and failed.
+- **Always 200**: after Linear's signature, timestamp and organization checks pass, the relay answers `200`, whatever happens to the deliveries. The body is `{ received: true, webhookId }`. Outcomes are in the logs and the `webhook_deliveries` table.
 
 ### Logging
 
@@ -58,7 +61,7 @@ The relay also logs one `webhook.fanout` line per webhook and one `webhook.deliv
 
 ### Positive
 
-- **Low latency**: the dispatcher gets the webhook right away.
+- **Low latency**: the dispatcher gets the webhook right away, and Linear's 5 second limit never depends on a slow dispatcher.
 - **Simple**: no message queue, dead-letter queue or retry service.
 - **Observable**: the full delivery history sits in SQLite.
 - **Cheap**: no queue infrastructure to run.
@@ -68,7 +71,7 @@ The relay also logs one `webhook.fanout` line per webhook and one `webhook.deliv
 - **No automatic retries**: a webhook is lost if its dispatcher is down.
   - The relay answers `200`, so Linear does not retry either.
   - The dispatcher must recover by re-fetching from Linear.
-- **Timeout cost**: a slow dispatcher delays the relay's response, for up to 5 seconds.
+- **Lost if the relay dies mid-delivery**: Linear already has its `200`, so a crash between the answer and the delivery drops that webhook. Draining on shutdown covers a normal stop, not a crash.
 - **No ordering guarantee**: parallel delivery does not preserve the order of events.
 
 ## Alternatives Considered

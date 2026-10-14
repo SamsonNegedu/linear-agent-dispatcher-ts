@@ -131,7 +131,57 @@ describe('WebhookIngestService.ingest', () => {
     const result = await service.ingest('linear', 'sig', rawBody);
 
     expect(webhookService.fanOutWebhook).toHaveBeenCalledWith(event, JSON.stringify(event));
-    expect(result).toEqual(expect.objectContaining({ webhookId: 'wh_1', delivered: 1 }));
+    expect(result).toEqual({ webhookId: 'wh_1' });
+  });
+
+  it('answers before delivery to subscribers has finished', async () => {
+    let finishDelivery: () => void = () => undefined;
+    webhookService.fanOutWebhook.mockReturnValue(
+      new Promise((resolve) => {
+        finishDelivery = () =>
+          resolve({ webhookId: 'wh_1', teamKey: 'ENG', assigneeId: 'u', delivered: 1, failed: 0 });
+      }),
+    );
+
+    const result = await service.ingest('linear', 'sig', rawBody);
+
+    expect(result).toEqual({ webhookId: 'wh_1' });
+    expect(webhookService.fanOutWebhook).toHaveBeenCalledTimes(1);
+    finishDelivery();
+  });
+
+  it('still answers, and logs, when delivery fails', async () => {
+    const logged: string[] = [];
+    (service as unknown as { logger: { error: (m: string) => void } }).logger.error = (m) => {
+      logged.push(m);
+    };
+    webhookService.fanOutWebhook.mockRejectedValue(new Error('db locked'));
+
+    await expect(service.ingest('linear', 'sig', rawBody)).resolves.toEqual({ webhookId: 'wh_1' });
+    await service.beforeApplicationShutdown(); // waits for the background delivery
+
+    expect(logged.join('\n')).toMatch(/webhook\.fanout\.failed .*reason="db locked"/);
+  });
+
+  it('lets deliveries under way finish before shutting down', async () => {
+    let finishDelivery: () => void = () => undefined;
+    let delivered = false;
+    webhookService.fanOutWebhook.mockReturnValue(
+      new Promise((resolve) => {
+        finishDelivery = () => {
+          delivered = true;
+          resolve({ webhookId: 'wh_1', teamKey: 'ENG', assigneeId: 'u', delivered: 1, failed: 0 });
+        };
+      }),
+    );
+    await service.ingest('linear', 'sig', rawBody);
+
+    const shutdown = service.beforeApplicationShutdown();
+    expect(delivered).toBe(false);
+    finishDelivery();
+    await shutdown;
+
+    expect(delivered).toBe(true);
   });
 
   it('refuses a provider with no configured ingest settings', async () => {

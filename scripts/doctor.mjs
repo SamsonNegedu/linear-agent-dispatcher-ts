@@ -142,7 +142,10 @@ await check('signed webhook accepted (secret, replay check)', async () => {
     res.status !== 401,
     'the relay rejected the signature: LINEAR_WEBHOOK_SECRET differs from the secret on the Linear app.',
   );
-  need(res.ok, `the relay answered HTTP ${res.status}. See logs/relay.log.`);
+  need(
+    res.status === 200,
+    `the relay answered HTTP ${res.status}; Linear expects 200. If it is 201, the relay is running an old build: restart it. Otherwise see logs/relay.log.`,
+  );
   return 'relay verified and accepted a signed test webhook';
 });
 
