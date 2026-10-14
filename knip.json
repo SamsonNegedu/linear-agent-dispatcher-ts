@@ -4,7 +4,9 @@
     ".": { "entry": ["scripts/*.mjs"] },
     "packages/*": { "entry": ["src/**/*.spec.ts"] },
     "packages/linear-client": {},
-    "services/dispatcher-service": { "entry": ["src/cli/*.ts", "src/**/*.spec.ts", "scripts/*.js"] },
+    "services/dispatcher-service": {
+      "entry": ["src/cli/*.ts", "src/**/*.spec.ts", "scripts/*.js"]
+    },
     "services/relay-service": { "entry": ["src/main.ts", "src/**/*.spec.ts"] }
   },
   "ignoreExportsUsedInFile": true

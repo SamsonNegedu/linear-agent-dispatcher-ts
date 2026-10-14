@@ -41,11 +41,11 @@ port.
 
 `startTunnel` in `scripts/lib/tunnel.mjs` takes the first option that applies:
 
-| Order | Tunnel                | Chosen when                                                  | URL                    |
-| ----- | --------------------- | ------------------------------------------------------------ | ---------------------- |
-| 1     | Cloudflare named      | `CLOUDFLARE_TUNNEL_TOKEN` and `TUNNEL_HOSTNAME` are both set | stable, needs a domain |
-| 2     | Tailscale Funnel      | Tailscale reports `BackendState` of `Running`                | stable, no domain      |
-| 3     | Cloudflare quick tunnel | `cloudflared` is installed                                 | random on every run    |
+| Order | Tunnel                  | Chosen when                                                  | URL                    |
+| ----- | ----------------------- | ------------------------------------------------------------ | ---------------------- |
+| 1     | Cloudflare named        | `CLOUDFLARE_TUNNEL_TOKEN` and `TUNNEL_HOSTNAME` are both set | stable, needs a domain |
+| 2     | Tailscale Funnel        | Tailscale reports `BackendState` of `Running`                | stable, no domain      |
+| 3     | Cloudflare quick tunnel | `cloudflared` is installed                                   | random on every run    |
 
 Stable options come first because a changed URL forces a new Linear connection
 and new URLs in the Linear app. The named tunnel passes its token through the

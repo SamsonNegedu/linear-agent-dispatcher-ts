@@ -210,11 +210,11 @@ fail label validation.
 
 **Trigger semantics (Stage 1):**
 
-| Approach                                                                      | Rejected because                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Require `labelChange.added` non-empty (first attempt)                         | Went too far: blocked delegate assignment and any other legitimate non-label trigger; see Context                                                                                                       |
+| Approach                                                                      | Rejected because                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Require `labelChange.added` non-empty (first attempt)                         | Went too far: blocked delegate assignment and any other legitimate non-label trigger; see Context                                                                                                        |
 | Track the webhook actor and skip self-authored updates                        | The dispatcher would need to know its own bot/OAuth user identity (a lookup plus a cache). That is dispatcher-specific config, and does not belong in the generic webhook-parsing layer the relay shares |
-| Time-based debounce (ignore updates within N seconds of our own last comment) | Cannot tell cause from coincidence: a real human edit seconds after a bot comment would also be dropped. It swaps a structural rule for a timing-dependent failure                                      |
+| Time-based debounce (ignore updates within N seconds of our own last comment) | Cannot tell cause from coincidence: a real human edit seconds after a bot comment would also be dropped. It swaps a structural rule for a timing-dependent failure                                       |
 
 **Routing (Stage 2):**
 

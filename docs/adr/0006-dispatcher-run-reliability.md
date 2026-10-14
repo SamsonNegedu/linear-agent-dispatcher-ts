@@ -143,11 +143,11 @@ duplicate-run window applies as usual.
 
 ## Alternatives Considered
 
-| Approach                                                             | Rejected because                                                                                                                                                                                    |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A per-issue same-day run cap, in addition to the options below       | Redundant. `duplicateRunWindowMs` and the one-active-run-per-issue check already prevent the failure a cap would catch                                                                             |
+| Approach                                                             | Rejected because                                                                                                                                                                        |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A per-issue same-day run cap, in addition to the options below       | Redundant. `duplicateRunWindowMs` and the one-active-run-per-issue check already prevent the failure a cap would catch                                                                  |
 | Retry failed webhook deliveries with backoff                         | Most failures here are not transient (validation errors, policy rejections, real bugs). Retry would not help and would duplicate the feedback already posted to Linear on first failure |
-| Kill only the direct child process on timeout, not the process group | Would miss subprocesses that Claude spawns, which is the risk a timeout must cover                                                                                                 |
+| Kill only the direct child process on timeout, not the process group | Would miss subprocesses that Claude spawns, which is the risk a timeout must cover                                                                                                      |
 
 ## References
 

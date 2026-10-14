@@ -44,13 +44,13 @@ Linear sends webhooks, and the dispatcher instances that act on them run on loca
 
 ## Alternatives Considered
 
-| Approach                                             | Rejected because                                                                                                                                       |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Each dispatcher does its own OAuth with Linear       | One OAuth app per dispatcher, credential sprawl, no central delivery visibility                                                                                        |
+| Approach                                             | Rejected because                                                                                                                                    |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each dispatcher does its own OAuth with Linear       | One OAuth app per dispatcher, credential sprawl, no central delivery visibility                                                                     |
 | Relay on AWS Lambda + DynamoDB (the original design) | Needs an AWS account, deployment and Docker for local DynamoDB, for a system one developer or team runs on their own machines. Removed, see History |
-| Event bus (SNS/SQS) between relay and dispatchers    | Adds latency and infrastructure for guarantees this workload does not need                                                                                   |
-| Always-on server or RDS                              | Operating cost and effort with no benefit at this scale                                                                                                |
-| Express instead of NestJS on Fastify                 | Express needs hand-written error handling, validation and logging that NestJS already provides                                                                         |
+| Event bus (SNS/SQS) between relay and dispatchers    | Adds latency and infrastructure for guarantees this workload does not need                                                                          |
+| Always-on server or RDS                              | Operating cost and effort with no benefit at this scale                                                                                             |
+| Express instead of NestJS on Fastify                 | Express needs hand-written error handling, validation and logging that NestJS already provides                                                      |
 
 ## History
 
