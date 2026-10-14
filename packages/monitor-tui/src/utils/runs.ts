@@ -5,7 +5,7 @@ import { formatTime } from './format';
 
 export type RunFilter = 'all' | 'active' | 'needs_input' | 'failed' | 'done';
 
-export const RUN_FILTERS: readonly RunFilter[] = ['all', 'active', 'needs_input', 'failed', 'done'];
+const RUN_FILTERS: readonly RunFilter[] = ['all', 'active', 'needs_input', 'failed', 'done'];
 
 export const FILTER_LABEL: Record<RunFilter, string> = {
   all: 'All',

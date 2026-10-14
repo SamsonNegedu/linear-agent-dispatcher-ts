@@ -51,7 +51,7 @@ const DEFAULT_POLICY: RoutingPolicy = {
   duplicateRunWindowMs: 60_000,
 };
 
-export const ROUTING_CONFIG_FILE = 'routing.config.json';
+const ROUTING_CONFIG_FILE = 'routing.config.json';
 
 export function routingConfigPath(): string {
   return join(process.cwd(), ROUTING_CONFIG_FILE);

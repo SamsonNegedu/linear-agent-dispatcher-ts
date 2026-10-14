@@ -40,11 +40,6 @@ export interface RelayHealth {
   lastCheckedAt: string | null;
 }
 
-export interface RowColumn {
-  label: string;
-  width: number;
-}
-
 export interface RelayFormField {
   key: string;
   label: string;

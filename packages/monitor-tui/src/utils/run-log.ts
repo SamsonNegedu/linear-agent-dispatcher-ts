@@ -58,7 +58,7 @@ interface Block {
 }
 
 /** Turns one stream-json line from `claude -p` into short readable lines. */
-export const formatRunEvent = (raw: string): string[] => {
+const formatRunEvent = (raw: string): string[] => {
   let event: { type?: string; subtype?: string; message?: { content?: unknown }; result?: string };
   try {
     event = JSON.parse(raw);
