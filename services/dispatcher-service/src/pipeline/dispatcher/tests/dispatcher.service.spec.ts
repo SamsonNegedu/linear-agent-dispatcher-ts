@@ -67,6 +67,8 @@ describe('DispatcherService.dispatchWebhook', () => {
 
     const dispatchAdapterRegistry = new AdapterRegistry<DispatchAdapter>();
     dispatchAdapterRegistry.register(dispatchAdapter);
+    // A second provider with a dispatch adapter but no issue-context resolver.
+    dispatchAdapterRegistry.register({ ...dispatchAdapter, provider: 'other' });
 
     const issueContextResolverRegistry = new AdapterRegistry<IssueContextResolver>();
     issueContextResolverRegistry.register(issueContextResolver);
@@ -140,6 +142,38 @@ describe('DispatcherService.dispatchWebhook', () => {
       }),
     );
     expect(executorService.executeRun).toHaveBeenCalledWith('run_1', event);
+  });
+
+  it('routes on the webhook tags when the provider has no issue-context resolver', async () => {
+    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'created' });
+    dispatchAdapter.resolveRouting.mockReturnValue({
+      repoLabel: 'repo-a',
+      repoPath: '/repos/repo-a',
+      skill: 'implement',
+      dedupeWindowMs: 60_000,
+    });
+    store.enqueueRun.mockResolvedValue({
+      id: 'run_1',
+      provider: 'other',
+      issueId: 'issue_1',
+      issueIdentifier: 'ISSUE-1',
+      webhookId: 'wh_1',
+      domainLabel: 'repo-a',
+      repoPath: '/repos/repo-a',
+      skill: 'implement',
+      status: 'pending',
+      startedAt: new Date(),
+      triggerSource: 'webhook',
+    });
+
+    const event = makeEvent({ provider: 'other', routingTags: ['repo-a', 'agent-implement'] });
+    await service.dispatchWebhook(event);
+
+    expect(issueContextResolver.resolveIssueContext).not.toHaveBeenCalled();
+    expect(dispatchAdapter.resolveRouting).toHaveBeenCalledWith(
+      expect.objectContaining({ routingTags: ['repo-a', 'agent-implement'] }),
+    );
+    expect(store.enqueueRun).toHaveBeenCalledWith(expect.objectContaining({ provider: 'other' }));
   });
 
   it('silently skips when routing is incomplete (labels not yet set)', async () => {
