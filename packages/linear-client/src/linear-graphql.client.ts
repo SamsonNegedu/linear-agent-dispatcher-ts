@@ -47,12 +47,14 @@ export class LinearGraphQLClient {
   constructor(
     private readonly credential: string | TokenSource,
     private readonly logger?: LinearClientLogger,
+    /** Test seam: how a token becomes an SDK client. */
+    private readonly createSdk: (token: string) => LinearClient = newSdkClient,
   ) {}
 
   private async sdk(): Promise<LinearClient> {
     const token =
       typeof this.credential === 'string' ? this.credential : await this.credential.getToken();
-    if (this.sdkClient?.token !== token) this.sdkClient = { token, client: newSdkClient(token) };
+    if (this.sdkClient?.token !== token) this.sdkClient = { token, client: this.createSdk(token) };
     return this.sdkClient.client;
   }
 
