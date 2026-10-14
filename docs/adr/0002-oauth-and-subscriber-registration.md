@@ -4,6 +4,8 @@
 
 Accepted
 
+**Amended:** 2026-10-14. The dispatcher now also holds the Linear OAuth app credentials (see "The agent's own token").
+
 ## Context
 
 Local dispatchers need to:
@@ -42,11 +44,29 @@ Use an OAuth flow for registration and per-dispatcher HMAC signing for delivery.
 - The relay signs the payload with each subscriber's secret (HMAC-SHA256) and POSTs it to the subscriber's endpoint with an `X-Relay-Signature` header.
 - The dispatcher verifies the signature with its stored secret.
 
+### The agent's own token
+
+Linear accepts agent-session activity only from the app's token (`lin_oauth_...`), not from a personal
+key. That token is a different thing from the user token above: it acts as the app user (the agent),
+and Linear gives it a 24 hour life when it comes from the browser flow.
+
+Instead of storing a token that expires, each service mints its own with Linear's client-credentials
+grant (`AppTokenProvider` in `packages/linear-client`). The token lasts 30 days, lives only in the
+service's memory, and is fetched again before it expires or when Linear rejects it. Both services
+use the same scopes (`read,write,app:assignable,app:mentionable`), because Linear revokes an app's
+tokens when it is asked for different ones.
+
+Both services therefore read `LINEAR_OAUTH_CLIENT_ID` and `LINEAR_OAUTH_CLIENT_SECRET` from the one root
+`.env.local` ([ADR 0008](0008-one-command-local-startup.md)). That ends the old rule that dispatchers
+never see Linear credentials. It is acceptable for a single operator who owns the relay and the
+dispatcher. It would need revisiting before a dispatcher belongs to someone other than the operator.
+A fixed `LINEAR_AGENT_TOKEN` still works as a fallback, but it expires on its own.
+
 ## Consequences
 
 ### Positive
 
-- **OAuth isolation**: only the relay holds Linear credentials. Dispatchers never see them.
+- **OAuth isolation for users**: the browser login that registers a dispatcher happens only at the relay, and the relay keeps no user token. (The app's own client credentials are no longer relay-only: see "The agent's own token".)
 - **Per-dispatcher secrets**: leaking one dispatcher's secret does not affect other dispatchers.
 - **Traceable**: the relay knows which dispatcher receives which webhook.
 - **Revocable**: the relay can drop a dispatcher without revoking Linear access.
