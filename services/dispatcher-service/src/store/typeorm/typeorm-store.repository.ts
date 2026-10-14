@@ -3,11 +3,11 @@ import { DataSource, Repository, LessThan, MoreThanOrEqual } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { RunEntity } from './run.entity';
 import { ProcessedWebhookEntity } from './processed-webhook.entity';
-import type { IStoreRepository, Run, EnqueueRunInput, CompleteRunInput } from '../store.interfaces';
+import type { StoreRepository, Run, EnqueueRunInput, CompleteRunInput } from '../store.interfaces';
 import { DuplicatePayloadError, ActiveRunError, RecentDuplicateRunError } from '../store.errors';
 
 @Injectable()
-export class TypeORMStoreRepository implements IStoreRepository {
+export class TypeORMStoreRepository implements StoreRepository {
   private runRepository: Repository<RunEntity>;
   private webhookRepository: Repository<ProcessedWebhookEntity>;
 

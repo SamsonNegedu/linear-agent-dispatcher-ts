@@ -1,19 +1,19 @@
 import { StaleRunReconciliationService } from '../stale-run-reconciliation.service';
-import type { IStoreRepository } from '../store.interfaces';
+import type { StoreRepository } from '../store.interfaces';
 import type { DispatcherConfig } from '../../config/config';
 import { makeDispatcherConfig } from '../../test-utils/dispatcher-config';
 
 const makeConfig = (): DispatcherConfig => makeDispatcherConfig({ linear: {} });
 
 describe('StaleRunReconciliationService', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let service: StaleRunReconciliationService;
 
   beforeEach(() => {
     jest.useFakeTimers();
     store = {
       reconcileStaleRuns: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<IStoreRepository>;
+    } as unknown as jest.Mocked<StoreRepository>;
     service = new StaleRunReconciliationService(store, makeConfig());
   });
 

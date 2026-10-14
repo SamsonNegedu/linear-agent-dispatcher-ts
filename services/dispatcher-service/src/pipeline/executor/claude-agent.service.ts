@@ -1,68 +1,10 @@
 import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
 import { spawn, type ChildProcess } from 'child_process';
-import { createWriteStream, mkdirSync } from 'fs';
-import { join } from 'path';
 import type { DispatcherConfig } from '../../config/config';
-import { MAX_ERROR_MESSAGE_LENGTH } from './constants';
+import { classifyExit, type ClaudeSpawnResult } from './claude-output';
+import { killProcessGroup, ProcessGroupTerminator } from './process-group';
+import { openRunLog } from './run-log';
 import { McpServerDiscoveryService } from './mcp-server-discovery.service';
-import { errorMessage } from '../../common/error-message';
-
-interface ClaudeSpawnResult {
-  status: 'succeeded' | 'failed' | 'needs_input' | 'cancelled';
-  exitCode?: number;
-  errorSnippet?: string;
-  sessionId?: string;
-  resultText?: string;
-  totalCostUSD?: number;
-}
-
-// A skill that must stop to ask something (nobody can answer an unattended run)
-// begins its final reply with "Stop rule:". Tolerates leading markdown such as `**`.
-const STOP_RULE_PATTERN = /^[\s*_`>#-]*Stop rule:/i;
-
-export const isStopRuleReply = (text: string | undefined): boolean =>
-  !!text && STOP_RULE_PATTERN.test(text);
-
-// How long after SIGTERM before escalating to SIGKILL.
-const SIGKILL_GRACE_MS = 10_000;
-
-// Field names are the Claude CLI's `result` event in `--output-format stream-json` (snake_case).
-interface ClaudeOutput {
-  type?: string;
-  session_id?: string;
-  result?: string;
-  total_cost_usd?: number;
-  stop_reason?: string;
-  is_error?: boolean;
-}
-
-// One file per run, written live so `tail -f` shows progress. Never breaks the run.
-const openRunLog = (issueIdentifier: string, skill: string) => {
-  try {
-    const dir = join(process.cwd(), 'logs', 'runs');
-    mkdirSync(dir, { recursive: true });
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const file = join(dir, `${issueIdentifier}__${skill}__${stamp}.log`);
-    const stream = createWriteStream(file, { flags: 'a' });
-    stream.on('error', () => undefined);
-    return { file, stream };
-  } catch {
-    return undefined;
-  }
-};
-
-const parseResultEvent = (stdout: string): ClaudeOutput | undefined => {
-  const lines = stdout.split('\n');
-  for (let i = lines.length - 1; i >= 0; i--) {
-    try {
-      const event = JSON.parse(lines[i]) as ClaudeOutput;
-      if (event.type === 'result') return event;
-    } catch {
-      // not a JSON line
-    }
-  }
-  return undefined;
-};
 
 @Injectable()
 export class ClaudeAgentService implements OnModuleDestroy {
@@ -125,28 +67,19 @@ export class ClaudeAgentService implements OnModuleDestroy {
       let stdout = '';
       let stderr = '';
       let timeoutHandle: NodeJS.Timeout | null = null;
-      let killEscalationHandle: NodeJS.Timeout | null = null;
       let cancelled = false;
+      const terminator = new ProcessGroupTerminator(
+        child.pid,
+        `/${skill} for ${issueIdentifier}`,
+        this.logger,
+      );
 
-      // SIGTERM the whole process group, then SIGKILL if it ignores that. Same shape as the timeout.
-      const terminate = (reason: string) => {
-        this.logger.warn(
-          `Claude run ${reason}, sending SIGTERM: /${skill} for ${issueIdentifier} pid=${child.pid}`,
-        );
-        this.killProcessGroup(child.pid, 'SIGTERM');
-        killEscalationHandle = setTimeout(() => {
-          this.logger.error(
-            `Claude run still alive ${SIGKILL_GRACE_MS}ms after SIGTERM, sending SIGKILL: /${skill} for ${issueIdentifier} pid=${child.pid}`,
-          );
-          this.killProcessGroup(child.pid, 'SIGKILL');
-        }, SIGKILL_GRACE_MS);
-      };
       const runId = options?.runId;
       if (runId) {
         this.cancellers.set(runId, () => {
           cancelled = true;
           if (timeoutHandle) clearTimeout(timeoutHandle);
-          terminate('cancelled by user');
+          terminator.terminate('cancelled by user');
         });
       }
 
@@ -160,111 +93,61 @@ export class ClaudeAgentService implements OnModuleDestroy {
         runLog?.stream.write(data);
       });
 
-      child.on('error', (error) => {
+      const release = () => {
         this.live.delete(child);
         if (runId) this.cancellers.delete(runId);
         if (timeoutHandle) clearTimeout(timeoutHandle);
-        if (killEscalationHandle) clearTimeout(killEscalationHandle);
+        terminator.clear();
+      };
+
+      child.on('error', (error) => {
+        release();
         reject(error);
       });
 
       child.on('close', (code) => {
-        this.live.delete(child);
-        if (runId) this.cancellers.delete(runId);
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-        if (killEscalationHandle) clearTimeout(killEscalationHandle);
+        release();
         runLog?.stream.end();
-
-        let sessionId: string | undefined;
-        let resultText: string | undefined;
-        let totalCostUSD: number | undefined;
-        let errorSnippet: string | undefined;
-        let isError = false;
-
-        if (stdout) {
-          const output = parseResultEvent(stdout);
-          if (output) {
-            sessionId = output.session_id;
-            resultText = output.result;
-            totalCostUSD = output.total_cost_usd;
-            isError = output.is_error ?? false;
-            if (isError) {
-              errorSnippet = output.result;
-            }
-          }
-        }
-
-        if (!errorSnippet && stderr) {
-          // Raw stderr: the actual error is usually last, so keep the end (curated messages
-          // posted to Linear lead with the point and keep the start instead).
-          errorSnippet = stderr.slice(-MAX_ERROR_MESSAGE_LENGTH);
-        }
-
-        if (cancelled) {
-          this.logger.warn(`Claude spawn cancelled: /${skill} for ${issueIdentifier}`);
-          resolve({ status: 'cancelled', exitCode: code ?? undefined, sessionId, totalCostUSD });
-          return;
-        }
-
-        if (code === 0 && !isError && isStopRuleReply(resultText)) {
-          this.logger.warn(`Claude spawn stopped to ask: /${skill} (sessionId: ${sessionId})`);
-          resolve({
-            status: 'needs_input',
-            exitCode: code ?? undefined,
-            errorSnippet: resultText!.slice(0, MAX_ERROR_MESSAGE_LENGTH),
-            sessionId,
-            resultText,
-            totalCostUSD,
-          });
-        } else if (code === 0 && !isError) {
-          this.logger.log(
-            `Claude spawn succeeded: /${skill} (sessionId: ${sessionId}, cost: $${totalCostUSD})`,
-          );
-          resolve({
-            status: 'succeeded',
-            exitCode: code ?? undefined,
-            sessionId,
-            resultText,
-            totalCostUSD,
-          });
-        } else {
-          this.logger.error(
-            `Claude spawn failed: /${skill} (exit code ${code})`,
-            errorSnippet || 'No output',
-          );
-          resolve({
-            status: 'failed',
-            exitCode: code ?? undefined,
-            errorSnippet: errorSnippet || `Process exited with code ${code} and produced no output`,
-            sessionId,
-            totalCostUSD,
-          });
-        }
+        const result = classifyExit({ code, stdout, stderr, cancelled });
+        this.logOutcome(result, skill, issueIdentifier);
+        resolve(result);
       });
 
       if (this.config.executor.timeout) {
-        timeoutHandle = setTimeout(() => {
-          this.logger.warn(
-            `Claude run exceeded timeout, sending SIGTERM: /${skill} for ${issueIdentifier} pid=${child.pid}`,
-          );
-          this.killProcessGroup(child.pid, 'SIGTERM');
-
-          // Escalate to SIGKILL if SIGTERM was ignored; otherwise a hung process outlives its
-          // timeout. This timer is cleared on 'close'/'error', so firing means it is still alive.
-          killEscalationHandle = setTimeout(() => {
-            this.logger.error(
-              `Claude run still alive ${SIGKILL_GRACE_MS}ms after SIGTERM, sending SIGKILL: /${skill} for ${issueIdentifier} pid=${child.pid}`,
-            );
-            this.killProcessGroup(child.pid, 'SIGKILL');
-          }, SIGKILL_GRACE_MS);
-        }, this.config.executor.timeout);
+        // Escalates to SIGKILL if SIGTERM is ignored; otherwise a hung process outlives its timeout.
+        timeoutHandle = setTimeout(
+          () => terminator.terminate('exceeded timeout'),
+          this.config.executor.timeout,
+        );
       }
     });
   }
 
+  private logOutcome(result: ClaudeSpawnResult, skill: string, issueIdentifier: string): void {
+    switch (result.status) {
+      case 'cancelled':
+        this.logger.warn(`Claude spawn cancelled: /${skill} for ${issueIdentifier}`);
+        break;
+      case 'needs_input':
+        this.logger.warn(`Claude spawn stopped to ask: /${skill} (sessionId: ${result.sessionId})`);
+        break;
+      case 'succeeded':
+        this.logger.log(
+          `Claude spawn succeeded: /${skill} (sessionId: ${result.sessionId}, cost: $${result.totalCostUSD})`,
+        );
+        break;
+      case 'failed':
+        this.logger.error(
+          `Claude spawn failed: /${skill} (exit code ${result.exitCode})`,
+          result.errorSnippet || 'No output',
+        );
+        break;
+    }
+  }
+
   /** A detached Claude process outlives the dispatcher, so stop each one when the server stops. */
   onModuleDestroy(): void {
-    for (const child of this.live) this.killProcessGroup(child.pid, 'SIGTERM');
+    for (const child of this.live) killProcessGroup(child.pid, 'SIGTERM', this.logger);
   }
 
   /** Stops the live Claude process for a run. False when the run has no live process. */
@@ -274,22 +157,6 @@ export class ClaudeAgentService implements OnModuleDestroy {
     this.cancellers.delete(runId);
     cancel();
     return true;
-  }
-
-  /**
-   * process.kill() throws if the group already exited (a real race between the timeout and
-   * the signal), and an uncaught throw in a timer callback would crash the whole dispatcher.
-   */
-  private killProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
-    if (!pid) return;
-    try {
-      process.kill(-pid, signal);
-    } catch (error) {
-      const message = errorMessage(error);
-      this.logger.debug(
-        `killProcessGroup(${pid}, ${signal}) failed (likely already exited): ${message}`,
-      );
-    }
   }
 
   private buildSafeEnv(): NodeJS.ProcessEnv {

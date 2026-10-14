@@ -48,7 +48,10 @@ export interface CompleteRunInput {
   errorSnippet?: string;
 }
 
-export interface IStoreRepository {
+/** Injection token for the `StoreRepository` provider. */
+export const STORE_REPOSITORY = Symbol('StoreRepository');
+
+export interface StoreRepository {
   enqueueRun(input: EnqueueRunInput): Promise<Run>;
   getRun(id: string): Promise<Run | null>;
   getLatestRunWithSession(provider: string, issueId: string): Promise<Run | null>;

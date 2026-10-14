@@ -1,7 +1,8 @@
 import { EventEmitter } from 'events';
 import { spawn } from 'child_process';
 import { Test } from '@nestjs/testing';
-import { ClaudeAgentService, isStopRuleReply } from '../claude-agent.service';
+import { ClaudeAgentService } from '../claude-agent.service';
+import { isStopRuleReply } from '../claude-output';
 import { McpServerDiscoveryService } from '../mcp-server-discovery.service';
 import { ExecutorModule } from '../executor.module';
 import { FakeStoreModule } from '../../../test-utils/fake-store.module';

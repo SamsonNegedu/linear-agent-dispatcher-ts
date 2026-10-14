@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { LinearGraphQLClient } from '@linear-agent/linear-client';
-import { RunFeedbackService } from '../run-feedback.service';
+import { LinearRunReporter } from '../linear-run-reporter';
 import { ExecutorModule } from '../executor.module';
 import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import { StoreModule } from '../../../store/store.module';
@@ -17,7 +17,7 @@ const MockedLinearGraphQLClient = LinearGraphQLClient as jest.MockedClass<
 const makeConfig = (apiKey?: string, agentToken?: string): DispatcherConfig =>
   makeDispatcherConfig({ linear: { apiKey, agentToken } });
 
-async function buildService(apiKey?: string, agentToken?: string): Promise<RunFeedbackService> {
+async function buildService(apiKey?: string, agentToken?: string): Promise<LinearRunReporter> {
   const module = await Test.createTestingModule({
     imports: [ExecutorModule, DispatcherConfigModule],
   })
@@ -27,7 +27,7 @@ async function buildService(apiKey?: string, agentToken?: string): Promise<RunFe
     .useValue(makeConfig(apiKey, agentToken))
     .compile();
 
-  return module.get(RunFeedbackService);
+  return module.get(LinearRunReporter);
 }
 
 function mockLinear() {
@@ -39,7 +39,7 @@ function mockLinear() {
   return { createActivity, createComment };
 }
 
-describe('RunFeedbackService', () => {
+describe('LinearRunReporter', () => {
   afterEach(() => {
     jest.clearAllMocks();
   });

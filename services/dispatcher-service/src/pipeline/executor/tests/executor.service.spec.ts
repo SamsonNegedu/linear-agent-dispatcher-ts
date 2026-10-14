@@ -5,8 +5,10 @@ import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import { StoreModule } from '../../../store/store.module';
 import { ClaudeAgentService } from '../claude-agent.service';
 import { McpServerDiscoveryService } from '../mcp-server-discovery.service';
-import { RunFeedbackService } from '../run-feedback.service';
-import type { IStoreRepository, Run } from '../../../store/store.interfaces';
+import { LinearRunReporter } from '../linear-run-reporter';
+import type { RunReporter } from '../run-reporter';
+import type { StoreRepository, Run } from '../../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../../store/store.interfaces';
 import type { NormalizedEvent } from '@webhook-verify/core';
 
 function makeRun(overrides: Partial<Run> = {}): Run {
@@ -43,9 +45,9 @@ function makeEvent(): NormalizedEvent {
 }
 
 describe('ExecutorService.executeRun', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let claudeAgent: jest.Mocked<ClaudeAgentService>;
-  let feedback: jest.Mocked<RunFeedbackService>;
+  let feedback: jest.Mocked<RunReporter>;
   let service: ExecutorService;
 
   beforeEach(async () => {
@@ -53,7 +55,7 @@ describe('ExecutorService.executeRun', () => {
       getRun: jest.fn(),
       markRunning: jest.fn().mockResolvedValue(undefined),
       completeRun: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<IStoreRepository>;
+    } as unknown as jest.Mocked<StoreRepository>;
     claudeAgent = {
       spawn: jest.fn(),
       cancel: jest.fn(),
@@ -64,19 +66,19 @@ describe('ExecutorService.executeRun', () => {
       failed: jest.fn().mockResolvedValue(undefined),
       needsInput: jest.fn().mockResolvedValue(undefined),
       cancelled: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<RunFeedbackService>;
+    } as unknown as jest.Mocked<RunReporter>;
 
     const module = await Test.createTestingModule({ imports: [ExecutorModule] })
       .overrideModule(StoreModule)
       .useModule(FakeStoreModule)
-      .overrideProvider('IStoreRepository')
+      .overrideProvider(STORE_REPOSITORY)
       .useValue(store)
       .overrideProvider(ClaudeAgentService)
       .useValue(claudeAgent)
       .overrideProvider(McpServerDiscoveryService)
       .useValue({ allowRules: jest.fn().mockResolvedValue([]) })
-      .overrideProvider(RunFeedbackService)
-      .useValue(feedback)
+      .overrideProvider(LinearRunReporter)
+      .useValue({ ...feedback, provider: 'linear' })
       .compile();
 
     service = module.get(ExecutorService);
@@ -172,9 +174,9 @@ describe('ExecutorService.executeRun', () => {
 });
 
 describe('ExecutorService cancellation', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let claudeAgent: jest.Mocked<ClaudeAgentService>;
-  let feedback: jest.Mocked<RunFeedbackService>;
+  let feedback: jest.Mocked<RunReporter>;
   let service: ExecutorService;
 
   beforeEach(async () => {
@@ -182,7 +184,7 @@ describe('ExecutorService cancellation', () => {
       getRun: jest.fn(),
       markRunning: jest.fn().mockResolvedValue(undefined),
       completeRun: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<IStoreRepository>;
+    } as unknown as jest.Mocked<StoreRepository>;
     claudeAgent = {
       spawn: jest.fn(),
       cancel: jest.fn(),
@@ -190,19 +192,19 @@ describe('ExecutorService cancellation', () => {
     feedback = {
       started: jest.fn(),
       cancelled: jest.fn(),
-    } as unknown as jest.Mocked<RunFeedbackService>;
+    } as unknown as jest.Mocked<RunReporter>;
 
     const module = await Test.createTestingModule({ imports: [ExecutorModule] })
       .overrideModule(StoreModule)
       .useModule(FakeStoreModule)
-      .overrideProvider('IStoreRepository')
+      .overrideProvider(STORE_REPOSITORY)
       .useValue(store)
       .overrideProvider(ClaudeAgentService)
       .useValue(claudeAgent)
       .overrideProvider(McpServerDiscoveryService)
       .useValue({ allowRules: jest.fn().mockResolvedValue([]) })
-      .overrideProvider(RunFeedbackService)
-      .useValue(feedback)
+      .overrideProvider(LinearRunReporter)
+      .useValue({ ...feedback, provider: 'linear' })
       .compile();
     service = module.get(ExecutorService);
   });

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { IStoreRepository, Run } from '../../store/store.interfaces';
+import type { StoreRepository, Run } from '../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../store/store.interfaces';
 import { RoutingConfigService } from '../../config/routing-config.service';
 import { findSkill } from '../../config/skill-discovery';
 
@@ -26,7 +27,7 @@ export interface MonitorSummary {
 @Injectable()
 export class MonitorService {
   constructor(
-    @Inject('IStoreRepository') private readonly store: IStoreRepository,
+    @Inject(STORE_REPOSITORY) private readonly store: StoreRepository,
     private readonly routingConfig: RoutingConfigService,
   ) {}
 

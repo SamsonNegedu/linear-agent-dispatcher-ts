@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
+import { STORE_REPOSITORY } from '../store/store.interfaces';
 
 /**
  * Substitutes StoreModule in tests via `overrideModule` — StoreModule's real
  * form calls TypeOrmModule.forRootAsync(...), which opens an actual
  * better-sqlite3 connection on compile. This provides the same
- * 'IStoreRepository' token with no backing connection, so importing modules
+ * STORE_REPOSITORY token with no backing connection, so importing modules
  * still resolve, and tests then swap in a jest mock via
- * `.overrideProvider('IStoreRepository').useValue(...)`.
+ * `.overrideProvider(STORE_REPOSITORY).useValue(...)`.
  */
 @Module({
-  providers: [{ provide: 'IStoreRepository', useValue: {} }],
-  exports: ['IStoreRepository'],
+  providers: [{ provide: STORE_REPOSITORY, useValue: {} }],
+  exports: [STORE_REPOSITORY],
 })
 export class FakeStoreModule {}

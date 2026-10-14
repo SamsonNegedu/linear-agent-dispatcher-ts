@@ -1,9 +1,11 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import type { IStoreRepository } from '../../store/store.interfaces';
+import type { StoreRepository } from '../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../store/store.interfaces';
 import { ExecutorService } from '../executor/executor.service';
 import { ValidationError, IncompleteLabelsError, AdapterRegistry } from '@webhook-verify/core';
 import type { DispatchAdapter, NormalizedEvent } from '@webhook-verify/core';
-import type { IIssueContextResolver } from './issue-context-resolver.interface';
+import type { IssueContextResolver } from './issue-context-resolver.interface';
+import { ISSUE_CONTEXT_RESOLVER_REGISTRY } from './issue-context-resolver.interface';
 import {
   DuplicatePayloadError,
   ActiveRunError,
@@ -15,11 +17,12 @@ export class DispatcherService {
   private readonly logger = new Logger(DispatcherService.name);
 
   constructor(
-    @Inject('IStoreRepository') private readonly store: IStoreRepository,
+    @Inject(STORE_REPOSITORY) private readonly store: StoreRepository,
     private readonly executorService: ExecutorService,
     @Inject('DispatchAdapterRegistry')
     private readonly dispatchAdapterRegistry: AdapterRegistry<DispatchAdapter>,
-    @Inject('IIssueContextResolver') private readonly issueContextResolver: IIssueContextResolver,
+    @Inject(ISSUE_CONTEXT_RESOLVER_REGISTRY)
+    private readonly issueContextResolvers: AdapterRegistry<IssueContextResolver>,
   ) {}
 
   async dispatchWebhook(event: NormalizedEvent): Promise<void> {
@@ -38,13 +41,14 @@ export class DispatcherService {
       // Resolve labels (with GraphQL fallback if webhook incomplete). AgentSession
       // webhooks never carry an issueIdentifier, so backfill it from the same
       // fallback fetch instead of issuing a second API call for it.
-      const issueContext = await this.issueContextResolver.resolveIssueContext(
-        event.issueId,
-        event.routingTags,
-      );
-      event.routingTags = issueContext.labels;
-      if (!event.issueIdentifier && issueContext.identifier) {
-        event.issueIdentifier = issueContext.identifier;
+      const issueContext = await this.issueContextResolvers
+        .get(event.provider)
+        ?.resolveIssueContext(event);
+      if (issueContext) {
+        event.routingTags = issueContext.labels;
+        if (!event.issueIdentifier && issueContext.identifier) {
+          event.issueIdentifier = issueContext.identifier;
+        }
       }
 
       // Validate and resolve routing tags to a routing decision

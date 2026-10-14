@@ -13,18 +13,26 @@ import { WebhookQueueEntity } from '../../store/typeorm/webhook-queue.entity';
 import { StoreModule } from '../../store/store.module';
 import { ExecutorModule } from '../executor/executor.module';
 import { PreflightModule } from '../../ops/preflight/preflight.module';
-import { NullIssueContextResolver } from '../dispatcher/null-issue-context-resolver';
+import { LinearIssueContextResolver } from '../dispatcher/linear-issue-context-resolver';
 import { LinearDispatchAdapter } from '../dispatcher/linear-dispatch.adapter';
 import { RoutingConfigService } from '../../config/routing-config.service';
-import { RunFeedbackService } from '../executor/run-feedback.service';
+import { LinearRunReporter } from '../executor/linear-run-reporter';
+import {
+  ISSUE_CONTEXT_RESOLVER_REGISTRY,
+  type IssueContextResolver,
+} from '../dispatcher/issue-context-resolver.interface';
 import type { DispatcherConfig } from '../../config/config';
 
-const issueContextResolverProvider: Provider = {
-  provide: 'IIssueContextResolver',
-  useFactory: (config: DispatcherConfig) =>
-    config.linear.apiKey
-      ? new LinearGraphQLClient(config.linear.apiKey)
-      : new NullIssueContextResolver(),
+// Register one IssueContextResolver per provider here. DispatcherService resolves the right one
+// per event via event.provider.
+const issueContextResolverRegistryProvider: Provider = {
+  provide: ISSUE_CONTEXT_RESOLVER_REGISTRY,
+  useFactory: (config: DispatcherConfig) => {
+    const registry = new AdapterRegistry<IssueContextResolver>();
+    const client = config.linear.apiKey ? new LinearGraphQLClient(config.linear.apiKey) : null;
+    registry.register(new LinearIssueContextResolver(client));
+    return registry;
+  },
   inject: ['DispatcherConfig'],
 };
 
@@ -33,12 +41,12 @@ const issueContextResolverProvider: Provider = {
 // through the same /webhooks/relay endpoint from relay-service.
 const dispatchAdapterRegistryProvider: Provider = {
   provide: 'DispatchAdapterRegistry',
-  useFactory: (routingConfig: RoutingConfigService, feedback: RunFeedbackService) => {
+  useFactory: (routingConfig: RoutingConfigService, feedback: LinearRunReporter) => {
     const registry = new AdapterRegistry<DispatchAdapter>();
     registry.register(new LinearDispatchAdapter(routingConfig, feedback));
     return registry;
   },
-  inject: [RoutingConfigService, RunFeedbackService],
+  inject: [RoutingConfigService, LinearRunReporter],
 };
 
 @Module({
@@ -54,7 +62,7 @@ const dispatchAdapterRegistryProvider: Provider = {
     WebhookQueueService,
     RelayHealthService,
     WebhookRetentionService,
-    issueContextResolverProvider,
+    issueContextResolverRegistryProvider,
     dispatchAdapterRegistryProvider,
   ],
   exports: [RelayHealthService],

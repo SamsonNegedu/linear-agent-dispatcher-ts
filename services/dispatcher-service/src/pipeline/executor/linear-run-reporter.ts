@@ -3,12 +3,7 @@ import type { DispatcherConfig } from '../../config/config';
 import { ActivityType, LinearGraphQLClient } from '@linear-agent/linear-client';
 import { MAX_ERROR_MESSAGE_LENGTH } from './constants';
 import { errorMessage } from '../../common/error-message';
-
-/** Where feedback goes: the agent session when there is one, otherwise a comment on the issue. */
-export interface FeedbackTarget {
-  issueId?: string;
-  sessionId?: string;
-}
+import type { FeedbackTarget, RunReporter } from './run-reporter';
 
 interface Message {
   activity: ActivityType; // how it appears in an agent session timeline
@@ -17,13 +12,14 @@ interface Message {
 }
 
 /**
- * Tells the user what a run is doing, on Linear: an agent-session activity when the run was
+ * The Linear RunReporter: tells the user what a run is doing: an agent-session activity when the run was
  * triggered from a session, a plain issue comment otherwise. Posting never throws, so a
  * Linear outage cannot fail a run, and is skipped without LINEAR_API_KEY.
  */
 @Injectable()
-export class RunFeedbackService {
-  private readonly logger = new Logger(RunFeedbackService.name);
+export class LinearRunReporter implements RunReporter {
+  readonly provider = 'linear';
+  private readonly logger = new Logger(LinearRunReporter.name);
   // Linear accepts agent-session activities only from the app's OAuth token, and issue comments
   // from either credential, so each falls back to the other when only one is configured.
   private readonly activityClient: LinearGraphQLClient | null;

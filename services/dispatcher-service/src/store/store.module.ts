@@ -6,10 +6,11 @@ import { ProcessedWebhookEntity } from './typeorm/processed-webhook.entity';
 import { WebhookQueueEntity } from './typeorm/webhook-queue.entity';
 import { TypeORMStoreRepository } from './typeorm/typeorm-store.repository';
 import { StaleRunReconciliationService } from './stale-run-reconciliation.service';
+import { STORE_REPOSITORY } from './store.interfaces';
 import type { DispatcherConfig } from '../config/config';
 
 const storeProvider: Provider = {
-  provide: 'IStoreRepository',
+  provide: STORE_REPOSITORY,
   useFactory: (dataSource: DataSource) => new TypeORMStoreRepository(dataSource),
   inject: [getDataSourceToken()],
 };

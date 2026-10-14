@@ -1,5 +1,6 @@
 import { Injectable, Inject, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import type { IStoreRepository } from './store.interfaces';
+import type { StoreRepository } from './store.interfaces';
+import { STORE_REPOSITORY } from './store.interfaces';
 import type { DispatcherConfig } from '../config/config';
 
 // How often to sweep for stale runs while the process stays up. Independent
@@ -28,7 +29,7 @@ export class StaleRunReconciliationService implements OnModuleInit, OnModuleDest
   private readonly bootedAt = Date.now();
 
   constructor(
-    @Inject('IStoreRepository') private readonly store: IStoreRepository,
+    @Inject(STORE_REPOSITORY) private readonly store: StoreRepository,
     @Inject('DispatcherConfig') private readonly config: DispatcherConfig,
   ) {}
 

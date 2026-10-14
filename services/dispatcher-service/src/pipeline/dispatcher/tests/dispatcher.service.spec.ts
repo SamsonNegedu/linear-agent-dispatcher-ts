@@ -2,8 +2,10 @@ import { AdapterRegistry, IncompleteLabelsError, ValidationError } from '@webhoo
 import type { DispatchAdapter, NormalizedEvent } from '@webhook-verify/core';
 import { DispatcherService } from '../dispatcher.service';
 import { ExecutorService } from '../../executor/executor.service';
-import type { IStoreRepository } from '../../../store/store.interfaces';
-import type { IIssueContextResolver } from '../issue-context-resolver.interface';
+import type { StoreRepository } from '../../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../../store/store.interfaces';
+import type { IssueContextResolver } from '../issue-context-resolver.interface';
+import { ISSUE_CONTEXT_RESOLVER_REGISTRY } from '../issue-context-resolver.interface';
 import { DuplicatePayloadError, ActiveRunError } from '../../../store/store.errors';
 import { baseRelayModuleTestBuilder } from '../../relay/tests/relay-module-test-utils';
 
@@ -27,10 +29,10 @@ function makeEvent(overrides: Partial<NormalizedEvent> = {}): NormalizedEvent {
 }
 
 describe('DispatcherService.dispatchWebhook', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let executorService: jest.Mocked<ExecutorService>;
   let dispatchAdapter: jest.Mocked<DispatchAdapter>;
-  let issueContextResolver: jest.Mocked<IIssueContextResolver>;
+  let issueContextResolver: jest.Mocked<IssueContextResolver>;
   let service: DispatcherService;
 
   beforeEach(async () => {
@@ -59,21 +61,25 @@ describe('DispatcherService.dispatchWebhook', () => {
       postSkipped: jest.fn(),
     };
     issueContextResolver = {
+      provider: 'linear',
       resolveIssueContext: jest.fn(),
     };
 
     const dispatchAdapterRegistry = new AdapterRegistry<DispatchAdapter>();
     dispatchAdapterRegistry.register(dispatchAdapter);
 
+    const issueContextResolverRegistry = new AdapterRegistry<IssueContextResolver>();
+    issueContextResolverRegistry.register(issueContextResolver);
+
     const module = await baseRelayModuleTestBuilder()
-      .overrideProvider('IStoreRepository')
+      .overrideProvider(STORE_REPOSITORY)
       .useValue(store)
       .overrideProvider(ExecutorService)
       .useValue(executorService)
       .overrideProvider('DispatchAdapterRegistry')
       .useValue(dispatchAdapterRegistry)
-      .overrideProvider('IIssueContextResolver')
-      .useValue(issueContextResolver)
+      .overrideProvider(ISSUE_CONTEXT_RESOLVER_REGISTRY)
+      .useValue(issueContextResolverRegistry)
       .compile();
 
     service = module.get(DispatcherService);

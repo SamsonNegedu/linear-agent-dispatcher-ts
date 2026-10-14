@@ -8,7 +8,8 @@ import {
   Logger,
   Query,
 } from '@nestjs/common';
-import type { IStoreRepository } from '../../store/store.interfaces';
+import type { StoreRepository } from '../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../store/store.interfaces';
 import type { DispatcherConfig } from '../../config/config';
 import { RelayHealthService } from '../../pipeline/relay/relay-health.service';
 import { errorMessage } from '../../common/error-message';
@@ -18,7 +19,7 @@ export class HealthController {
   private readonly logger = new Logger(HealthController.name);
 
   constructor(
-    @Inject('IStoreRepository') private readonly store: IStoreRepository,
+    @Inject(STORE_REPOSITORY) private readonly store: StoreRepository,
     @Inject('DispatcherConfig') private readonly config: DispatcherConfig,
     private readonly relayHealth: RelayHealthService,
   ) {}

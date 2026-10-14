@@ -7,7 +7,8 @@ import { ExecutorService } from '../../../pipeline/executor/executor.service';
 import { DispatcherConfigModule } from '../../../config/dispatcher-config.module';
 import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 import { RoutingConfigService } from '../../../config/routing-config.service';
-import type { IStoreRepository, Run } from '../../../store/store.interfaces';
+import type { StoreRepository, Run } from '../../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../../store/store.interfaces';
 
 function makeRun(overrides: Partial<Run> = {}): Run {
   return {
@@ -27,7 +28,7 @@ function makeRun(overrides: Partial<Run> = {}): Run {
 }
 
 describe('MonitorService', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let routingConfig: jest.Mocked<RoutingConfigService>;
   let service: MonitorService;
 
@@ -36,7 +37,7 @@ describe('MonitorService', () => {
       getRunStats: jest.fn(),
       listRunsByStatus: jest.fn(),
       listRuns: jest.fn(),
-    } as unknown as jest.Mocked<IStoreRepository>;
+    } as unknown as jest.Mocked<StoreRepository>;
     routingConfig = {
       getAllRepositories: jest.fn().mockReturnValue([
         {
@@ -53,7 +54,7 @@ describe('MonitorService', () => {
     })
       .overrideModule(StoreModule)
       .useModule(FakeStoreModule)
-      .overrideProvider('IStoreRepository')
+      .overrideProvider(STORE_REPOSITORY)
       .useValue(store)
       .overrideProvider(RoutingConfigService)
       .useValue(routingConfig)
