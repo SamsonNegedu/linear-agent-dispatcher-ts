@@ -65,7 +65,7 @@ export class DispatcherService {
         domainLabel: repoLabel,
         repoPath,
         skill,
-        triggerSource: event.labelChange ? 'label' : 'webhook',
+        triggerSource: event.action === 'scan' ? 'scan' : event.labelChange ? 'label' : 'webhook',
         providerSessionId: event.sessionId,
         dedupeWindowMs,
       });

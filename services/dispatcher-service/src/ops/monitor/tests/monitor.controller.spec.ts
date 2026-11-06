@@ -1,6 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import { MonitorController } from '../monitor.controller';
 import type { MonitorService } from '../monitor.service';
+import type { ScannerService } from '../../../pipeline/scanner/scanner.service';
 import type { ExecutorService } from '../../../pipeline/executor/executor.service';
 
 describe('MonitorController cancel', () => {
@@ -9,6 +10,7 @@ describe('MonitorController cancel', () => {
     const controller = new MonitorController(
       {} as MonitorService,
       executor as unknown as ExecutorService,
+      {} as ScannerService,
     );
     return { controller, executor };
   };
@@ -35,5 +37,18 @@ describe('MonitorController cancel', () => {
     const error = await controller.cancel('run_1').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(HttpException);
     expect((error as HttpException).getStatus()).toBe(409);
+  });
+});
+
+describe('MonitorController scanner', () => {
+  it('returns the scanner report', () => {
+    const report = { enabled: true, scopes: [] };
+    const controller = new MonitorController(
+      {} as MonitorService,
+      {} as ExecutorService,
+      { getReport: () => report } as unknown as ScannerService,
+    );
+
+    expect(controller.scannerReport()).toBe(report);
   });
 });

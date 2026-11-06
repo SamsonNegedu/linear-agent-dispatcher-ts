@@ -2,7 +2,7 @@ import { AdapterRegistry, IncompleteLabelsError, ValidationError } from '@webhoo
 import type { DispatchAdapter, NormalizedEvent } from '@webhook-verify/core';
 import { DispatcherService } from '../dispatcher.service';
 import { ExecutorService } from '../../executor/executor.service';
-import type { StoreRepository } from '../../../store/store.interfaces';
+import type { Run, StoreRepository } from '../../../store/store.interfaces';
 import { STORE_REPOSITORY } from '../../../store/store.interfaces';
 import type { IssueContextResolver } from '../issue-context-resolver.interface';
 import { ISSUE_CONTEXT_RESOLVER_REGISTRY } from '../issue-context-resolver.interface';
@@ -43,6 +43,7 @@ describe('DispatcherService.dispatchWebhook', () => {
       getLatestRunWithSessionForAgent: jest.fn(),
       listRuns: jest.fn(),
       listRunsByStatus: jest.fn(),
+      countRunsByStatus: jest.fn(),
       hasActiveRun: jest.fn(),
       markRunning: jest.fn(),
       completeRun: jest.fn(),
@@ -142,6 +143,26 @@ describe('DispatcherService.dispatchWebhook', () => {
       }),
     );
     expect(executorService.executeRun).toHaveBeenCalledWith('run_1', event);
+  });
+
+  it('records a scanner event as triggerSource scan', async () => {
+    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'scan' });
+    issueContextResolver.resolveIssueContext.mockResolvedValue({
+      labels: ['repo-a', 'agent-implement'],
+    });
+    dispatchAdapter.resolveRouting.mockReturnValue({
+      repoLabel: 'repo-a',
+      repoPath: '/repos/repo-a',
+      skill: 'implement',
+      dedupeWindowMs: 60_000,
+    });
+    store.enqueueRun.mockResolvedValue({ id: 'run_1' } as Run);
+
+    await service.dispatchWebhook(makeEvent({ action: 'scan', changedFields: undefined }));
+
+    expect(store.enqueueRun).toHaveBeenCalledWith(
+      expect.objectContaining({ triggerSource: 'scan' }),
+    );
   });
 
   it('routes on the webhook tags when the provider has no issue-context resolver', async () => {

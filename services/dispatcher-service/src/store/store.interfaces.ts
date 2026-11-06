@@ -62,6 +62,13 @@ export interface StoreRepository {
   ): Promise<Run | null>;
   listRuns(limit: number): Promise<Run[]>;
   listRunsByStatus(status: Run['status'], limit: number): Promise<Run[]>;
+  /** Runs of one issue by status, for one skill and since a time when given. */
+  countRunsByStatus(
+    provider: string,
+    issueId: string,
+    skill?: string,
+    since?: Date,
+  ): Promise<Partial<Record<Run['status'], number>>>;
   hasActiveRun(provider: string, issueId: string): Promise<boolean>;
   markRunning(id: string, pgid?: number): Promise<void>;
   completeRun(id: string, out: CompleteRunInput): Promise<void>;

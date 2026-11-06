@@ -1,4 +1,7 @@
 import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { ProcessedWebhookEntity } from '../../../store/typeorm/processed-webhook.entity';
+import { WebhookQueueEntity } from '../../../store/typeorm/webhook-queue.entity';
 import { MonitorService } from '../monitor.service';
 import { MonitorModule } from '../monitor.module';
 import { FakeStoreModule } from '../../../test-utils/fake-store.module';
@@ -61,6 +64,11 @@ describe('MonitorService', () => {
       .overrideProvider('DispatcherConfig')
       .useValue(makeDispatcherConfig())
       .overrideProvider(ExecutorService)
+      .useValue({})
+      // MonitorModule imports RelayModule for the scanner, which wires these repositories.
+      .overrideProvider(getRepositoryToken(WebhookQueueEntity))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(ProcessedWebhookEntity))
       .useValue({})
       .compile();
 

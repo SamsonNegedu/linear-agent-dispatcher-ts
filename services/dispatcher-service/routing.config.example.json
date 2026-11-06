@@ -4,6 +4,14 @@
     "skipDoneIssues": false,
     "duplicateRunWindowMs": 60000
   },
+  "scanner": {
+    "enabled": false,
+    "intervalSec": 60,
+    "scopes": [
+      { "team": "ENG", "watch": [{ "label": "agent-triage", "states": ["Triage"] }] },
+      { "project": "<project uuid>", "watch": [{ "label": "agent-implement", "states": ["Todo"] }] }
+    ]
+  },
   "skills": ["implement"],
   "repositories": ["/absolute/path/to/my/repo"]
 }

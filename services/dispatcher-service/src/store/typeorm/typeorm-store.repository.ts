@@ -130,6 +130,25 @@ export class TypeORMStoreRepository implements StoreRepository {
     return runs.map((r) => this.entityToRun(r));
   }
 
+  async countRunsByStatus(
+    provider: string,
+    issueId: string,
+    skill?: string,
+    since?: Date,
+  ): Promise<Partial<Record<Run['status'], number>>> {
+    const runs = await this.runRepository.find({
+      where: {
+        provider,
+        issueId,
+        ...(skill ? { skill } : {}),
+        ...(since ? { startedAt: MoreThanOrEqual(since) } : {}),
+      },
+    });
+    const counts: Partial<Record<Run['status'], number>> = {};
+    for (const run of runs) counts[run.status] = (counts[run.status] ?? 0) + 1;
+    return counts;
+  }
+
   async hasActiveRun(provider: string, issueId: string): Promise<boolean> {
     const run = await this.runRepository.findOne({
       where: {

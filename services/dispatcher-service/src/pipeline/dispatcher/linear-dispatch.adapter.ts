@@ -42,6 +42,10 @@ export class LinearDispatchAdapter implements DispatchAdapter {
       };
     }
 
+    if (event.action === 'scan') {
+      return { shouldDispatch: true, reason: 'found by the scanner' };
+    }
+
     if (event.action === 'create') {
       return { shouldDispatch: true, reason: 'issue created' };
     }

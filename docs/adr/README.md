@@ -60,3 +60,4 @@ When adding a new feature or changing an existing decision:
 | Why doesn't re-registering create a duplicate?                           | [0005](0005-deterministic-subscriber-identity.md) |
 | What happens if a run fails, hangs, crashes, or needs to ask something?  | [0006](0006-dispatcher-run-reliability.md)        |
 | How does a second tracker plug in beside Linear?                         | [0009](0009-provider-agnostic-dispatch.md)        |
+| How do labelled issues get picked up without a webhook?                  | [0010](0010-label-scanner.md)                     |

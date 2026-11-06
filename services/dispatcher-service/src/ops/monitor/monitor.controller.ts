@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import type { Run } from '../../store/store.interfaces';
 import { MonitorService, type MonitorSummary } from './monitor.service';
+import { ScannerService } from '../../pipeline/scanner/scanner.service';
+import type { ScannerReport } from '../../pipeline/scanner/scanner-report';
 import { ExecutorService } from '../../pipeline/executor/executor.service';
 import { errorMessage } from '../../common/error-message';
 
@@ -21,6 +23,7 @@ export class MonitorController {
   constructor(
     private readonly monitorService: MonitorService,
     private readonly executor: ExecutorService,
+    private readonly scanner: ScannerService,
   ) {}
 
   @Post('runs/:id/cancel')
@@ -48,6 +51,12 @@ export class MonitorController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Get('scanner')
+  @HttpCode(200)
+  scannerReport(): ScannerReport {
+    return this.scanner.getReport();
   }
 
   @Get('runs')

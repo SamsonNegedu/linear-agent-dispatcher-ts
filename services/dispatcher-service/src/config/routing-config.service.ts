@@ -5,6 +5,7 @@ import { join } from 'path';
 import {
   RepositoryEntry,
   RoutingConfigFile,
+  ScannerConfig,
   formatSchemaIssues,
   repoLabel,
   repoPathOf,
@@ -85,6 +86,11 @@ export class RoutingConfigService {
    */
   getPolicy(): RoutingPolicy {
     return this.policy;
+  }
+
+  /** The scanner block, or undefined when it is absent or switched off. */
+  getScanner(): ScannerConfig | undefined {
+    return this.config.scanner?.enabled ? this.config.scanner : undefined;
   }
 
   /** Repos with every mapping annotated by where it came from (reads disk). */

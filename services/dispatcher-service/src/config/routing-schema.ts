@@ -30,6 +30,39 @@ const repositoryObject = z
 // A repo is either just its path, or an object when something needs overriding.
 const repository = z.union([z.string().min(1), repositoryObject]);
 
+// One label the scanner watches, and the states an issue must be in. The label is also the mode
+// label, so it picks the skill: `agent-triage` runs `/triage`.
+const scannerWatch = z
+  .object({
+    label: z.string().min(1).regex(IDENTIFIER, IDENTIFIER_HINT),
+    states: z.array(z.string().min(1)).min(1),
+  })
+  .strict();
+
+// Where to look: a whole team (new issues often have no project yet) or one project.
+const scannerScope = z
+  .object({
+    team: z.string().min(1).optional().describe('Team key, e.g. "DLAI"'),
+    project: z.string().min(1).optional().describe('Linear project id'),
+    watch: z.array(scannerWatch).min(1, 'watch at least one label'),
+    // Runs from this scope that may be in flight at once.
+    maxConcurrent: z.number().int().min(1).default(1),
+    // Failed runs for one issue and skill before the scanner stops picking it up.
+    maxAttempts: z.number().int().min(1).default(3),
+  })
+  .strict()
+  .refine((scope) => Boolean(scope.team) !== Boolean(scope.project), {
+    message: 'set exactly one of "team" or "project"',
+  });
+
+const scanner = z
+  .object({
+    enabled: z.boolean().default(true),
+    intervalSec: z.number().int().min(10).default(60),
+    scopes: z.array(scannerScope).min(1, 'define at least one scope'),
+  })
+  .strict();
+
 export const routingConfigSchema = z
   .object({
     $schema: z.string().optional(),
@@ -41,6 +74,8 @@ export const routingConfigSchema = z
       })
       .strict()
       .optional(),
+    // Polls Linear for labelled issues and dispatches them without a webhook. Off when absent.
+    scanner: scanner.optional(),
     // Exposed in every repo (each repo may add more). Nothing is exposed unless listed.
     skills: exposedSkills.optional(),
     repositories: z.array(repository).min(1, 'define at least one repository'),
@@ -62,6 +97,8 @@ export const routingConfigSchema = z
   });
 
 export type RoutingConfigFile = z.infer<typeof routingConfigSchema>;
+export type ScannerConfig = z.output<typeof scanner>;
+export type ScannerScopeConfig = z.output<typeof scannerScope>;
 export type RepositoryEntry = z.infer<typeof repository>;
 
 export function repoPathOf(repo: RepositoryEntry): string {
