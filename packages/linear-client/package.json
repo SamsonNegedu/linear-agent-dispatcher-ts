@@ -13,10 +13,10 @@
     ".": "./dist/index.js"
   },
   "dependencies": {
-    "@linear/sdk": "^88.2.0"
+    "@linear/sdk": "101.1.0"
   },
   "devDependencies": {
-    "@types/node": "^24.19.2",
-    "typescript": "^5.3.3"
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
   }
 }

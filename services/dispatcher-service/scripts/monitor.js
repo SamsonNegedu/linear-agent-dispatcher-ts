@@ -39,8 +39,8 @@ const healthUrl = `http://localhost:${port}/monitor/summary`;
 
   const launchServer = () => {
     const child = startService({
-      command: 'npx',
-      args: ['ts-node', 'src/main.ts'],
+      command: 'pnpm',
+      args: ['dev'], // tsc, then the compiled server
       cwd: dispatcherDir,
       logFile,
       onExit: (code) => {

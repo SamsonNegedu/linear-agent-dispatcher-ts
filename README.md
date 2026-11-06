@@ -16,7 +16,7 @@ Linear webhook → Relay (local, behind a tunnel) → Dispatcher → Claude CLI 
 
 ## Getting Started
 
-**Prerequisites:** Node.js 24+, pnpm 9+, Bun (monitor TUI), a Linear OAuth app, the Claude CLI, and Tailscale (recommended) or `cloudflared` for the tunnel.
+**Prerequisites:** Node.js 26+, pnpm 9+, Bun (monitor TUI), a Linear OAuth app, the Claude CLI, and Tailscale (recommended) or `cloudflared` for the tunnel.
 
 ```bash
 pnpm install
