@@ -1,9 +1,10 @@
 import React from 'react';
 import type { MonitorSnapshot } from './services/monitor-api.service';
-import type { RelayTabProps } from './types';
+import type { RelayActions } from './types';
 import { OverviewView } from './components/OverviewView';
-import { RelayTab } from './components/RelayTab';
 import { RunsView } from './components/RunsView';
+import { ScannerView } from './components/ScannerView';
+import { scannerAttention, scannerInFlight, scannerText } from './utils/scanner';
 import { LogsView } from './components/LogsView';
 import { readLogTail } from './utils/logs';
 import { allRuns, runDetailText } from './utils/runs';
@@ -12,7 +13,7 @@ export type Hint = readonly [key: string, label: string];
 
 export interface TabContext {
   snapshot: MonitorSnapshot;
-  relay: Pick<RelayTabProps, 'onRunScript' | 'mode' | 'setMode'>;
+  relay: RelayActions;
   /** A view calls this while rendering to say what `y` should copy for it. */
   registerCopy: (copy: () => string) => void;
 }
@@ -34,17 +35,21 @@ interface Tab {
 export const TABS: readonly Tab[] = [
   {
     name: 'Overview',
-    hints: [],
-    view: ({ snapshot }) => <OverviewView snapshot={snapshot} />,
-    text: ({ summary }) =>
-      summary.repos
-        .map((repo) =>
+    hints: [
+      ['c', 'connect relay'],
+      ['u', 'update relay'],
+    ],
+    view: ({ snapshot, relay }) => <OverviewView snapshot={snapshot} relay={relay} />,
+    text: ({ summary, relayHealth }) =>
+      [
+        ...summary.repos.map((repo) =>
           [
             `${repo.domainLabel}\t${repo.repoPath}`,
             ...repo.issueLabelToSkill.map((m) => `  ${m.label} -> /${m.skill}`),
           ].join('\n'),
-        )
-        .join('\n'),
+        ),
+        `Relay: ${JSON.stringify(relayHealth)}`,
+      ].join('\n'),
   },
   {
     name: 'Runs',
@@ -68,6 +73,19 @@ export const TABS: readonly Tab[] = [
         .join('\n\n'),
   },
   {
+    name: 'Scanner',
+    count: ({ scanner }) => {
+      const running = scannerInFlight(scanner);
+      return running > 0 ? String(running) : null;
+    },
+    alert: ({ scanner }) => scannerAttention(scanner),
+    hints: [['↑↓', 'scroll']],
+    view: ({ snapshot, registerCopy }) => (
+      <ScannerView snapshot={snapshot} registerCopy={registerCopy} />
+    ),
+    text: ({ scanner }) => scannerText(scanner),
+  },
+  {
     name: 'Logs',
     hints: [
       ['↑↓', 'select/scroll'],
@@ -78,14 +96,5 @@ export const TABS: readonly Tab[] = [
     ],
     view: ({ registerCopy }) => <LogsView registerCopy={registerCopy} />,
     text: () => readLogTail().join('\n'),
-  },
-  {
-    name: 'Relay',
-    hints: [
-      ['c', 'connect'],
-      ['u', 'update'],
-    ],
-    view: ({ snapshot, relay }) => <RelayTab {...relay} relayHealth={snapshot.relayHealth} />,
-    text: ({ relayHealth }) => JSON.stringify(relayHealth, null, 2),
   },
 ];

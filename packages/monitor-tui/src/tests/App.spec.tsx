@@ -42,22 +42,29 @@ const summary = {
 };
 
 // Serves the monitor API from memory.
-const stubFetch = (runs: Record<string, unknown[]> = byStatus): void => {
+const scannerOff = { enabled: false, scopes: [] };
+
+const stubFetch = (
+  runs: Record<string, unknown[]> = byStatus,
+  scanner: unknown = scannerOff,
+): void => {
   globalThis.fetch = (async (input: Request | string | URL) => {
     const url = String(input);
     const status = url.match(/status=(\w+)/)?.[1];
     const data = url.includes('/monitor/summary')
       ? summary
-      : status
-        ? (runs[status] ?? [])
-        : {
-            relay: {
-              enabled: false,
-              configured: false,
-              subscriberCheck: null,
-              lastCheckedAt: null,
-            },
-          };
+      : url.includes('/monitor/scanner')
+        ? scanner
+        : status
+          ? (runs[status] ?? [])
+          : {
+              relay: {
+                enabled: false,
+                configured: false,
+                subscriberCheck: null,
+                lastCheckedAt: null,
+              },
+            };
     return new Response(JSON.stringify({ data }));
   }) as unknown as typeof fetch;
 };
@@ -120,7 +127,8 @@ describe('App', () => {
     expect(frame).toContain('◆ DISPATCHER');
     expect(frame).toContain('1 running');
     expect(frame).toContain('1 need input');
-    for (const tab of ['1 Overview', '2 Runs 2', '3 Logs', '4 Relay']) expect(frame).toContain(tab);
+    for (const tab of ['1 Overview', '2 Runs 2', '3 Scanner', '4 Logs'])
+      expect(frame).toContain(tab);
     expect(frame).toContain('●1'); // a run is waiting for an answer
     expect(frame).toContain('repo-a');
     expect(frame).toContain('agent-implement');
@@ -135,9 +143,24 @@ describe('App', () => {
     await ui.press('2');
     expect(await ui.frame()).toContain('Runs · filter: All');
     await ui.press('3');
-    expect(await ui.frame()).toContain('Server · All');
+    expect(await ui.frame()).toContain('○ off');
     await ui.press('4');
-    expect(await ui.frame()).toContain('Relay Connection');
+    expect(await ui.frame()).toContain('Server · All');
+    await ui.press('1');
+    expect(await ui.frame()).toContain('Subscriber');
+    ui.stop();
+  });
+
+  test('the Overview opens the relay connect form with c, and esc closes it', async () => {
+    stubFetch();
+    const ui = await start();
+
+    await ui.press('c');
+    expect(await ui.frame()).toContain('Connect to Relay');
+    await ui.escape();
+    expect(await ui.frame()).toContain('Relay · c connect · u update');
+    await ui.press('u');
+    expect(await ui.frame()).toContain('Update Relay Endpoint');
     ui.stop();
   });
 
@@ -247,5 +270,78 @@ describe('Runs view', () => {
 
     expect(frame).toContain('No runs yet');
     expect(frame).toContain('pnpm test-webhook');
+  });
+});
+
+describe('Scanner view', () => {
+  const scanner = {
+    enabled: true,
+    intervalSec: 60,
+    lastScanAt: new Date(Date.now() - 12_000).toISOString(),
+    durationMs: 230,
+    scopes: [
+      {
+        name: 'team:DLA',
+        maxConcurrent: 1,
+        inFlight: 1,
+        watches: [
+          {
+            label: 'agent-triage',
+            states: ['Triage'],
+            issues: [
+              {
+                identifier: 'DLA-7',
+                title: 'Fix login',
+                skill: 'triage',
+                outcome: 'active',
+                detail: 'running',
+              },
+              {
+                identifier: 'DLA-8',
+                title: 'No repo yet',
+                outcome: 'skipped',
+                detail: 'no repo label',
+              },
+              {
+                identifier: 'DLA-9',
+                title: 'Flaky',
+                skill: 'triage',
+                outcome: 'exhausted',
+                detail: '2 failed runs',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  test('shows the schedule, each scope and why every issue is where it is', async () => {
+    stubFetch(byStatus, scanner);
+    const ui = await start(120, 30);
+    await ui.press('3');
+    const frame = await ui.frame();
+    ui.stop();
+
+    expect(frame).toContain('● on');
+    expect(frame).toContain('every 60s');
+    expect(frame).toContain('team:DLA');
+    expect(frame).toContain('1/1 running');
+    expect(frame).toContain('agent-triage in Triage');
+    expect(frame).toContain('DLA-7');
+    expect(frame).toContain('ACTIVE');
+    expect(frame).toMatch(/SKIPPED\s+no repo label/);
+    expect(frame).toMatch(/GAVE UP\s+2 failed runs/);
+    expect(frame).toContain('3 Scanner 1'); // a run is in flight
+  });
+
+  test('a run the scanner started is marked in the Runs view', async () => {
+    stubFetch({ ...byStatus, running: [run('1', 'running', { triggerSource: 'scan' })] });
+    const ui = await start(120, 30);
+    await ui.press('2');
+    const frame = await ui.frame();
+    ui.stop();
+
+    expect(frame).toContain('↻ Title of 1');
   });
 });

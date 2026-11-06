@@ -77,6 +77,7 @@ export const runDetailText = (run: Run, now: number): string =>
     `Repo:    ${run.domainLabel} (${run.repoPath})`,
     `Skill:   /${run.skill}`,
     `Run ID:  ${run.id}`,
+    ...(run.triggerSource === 'scan' ? ['Source:  scanner'] : []),
     `Started: ${new Date(run.startedAt).toLocaleString()}`,
     `${run.finishedAt ? 'Took:   ' : 'Running:'} ${formatTime(runDuration(run, now))}`,
     ...(run.errorSnippet ? ['', `${reasonLabel(run.status)}:`, run.errorSnippet] : []),

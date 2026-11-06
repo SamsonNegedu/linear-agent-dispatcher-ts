@@ -1,6 +1,6 @@
 import { getConfig } from '../utils/config';
 import type { RunStatus } from '../theme';
-import type { MonitorSummary, RelayHealth, Run } from '../types';
+import type { MonitorSummary, RelayHealth, Run, ScannerReport } from '../types';
 
 interface ApiResponse<T> {
   data: T;
@@ -40,11 +40,14 @@ export interface MonitorSnapshot {
   failedRuns: Run[];
   needsInputRuns: Run[];
   relayHealth: RelayHealth;
+  scanner: ScannerReport;
 }
 
 interface StatusResponse {
   relay: RelayHealth;
 }
+
+const SCANNER_OFF: ScannerReport = { enabled: false, scopes: [] };
 
 function getRuns(status: RunStatus, limit: number): Promise<Run[]> {
   return get<Run[]>(`/monitor/runs?status=${status}&limit=${limit}`);
@@ -63,6 +66,7 @@ export async function fetchMonitorSnapshot(
     cancelledRuns,
     failedRuns,
     needsInputRuns,
+    scanner,
     status,
   ] = await Promise.all([
     get<MonitorSummary>('/monitor/summary'),
@@ -72,6 +76,8 @@ export async function fetchMonitorSnapshot(
     getRuns('cancelled', 20),
     getRuns('failed', 20),
     getRuns('needs_input', 20),
+    // A dispatcher from before the scanner has no such route; the tab then reads as off.
+    get<ScannerReport>('/monitor/scanner').catch(() => SCANNER_OFF),
     // /status is cheap even at 1s poll cadence — the dispatcher only reads a
     // value RelayHealthService caches from its own slower background check
     // against relay-service, it doesn't hit relay-service per request. The
@@ -89,5 +95,6 @@ export async function fetchMonitorSnapshot(
     failedRuns,
     needsInputRuns,
     relayHealth: status.relay,
+    scanner: scanner?.scopes ? scanner : SCANNER_OFF,
   };
 }

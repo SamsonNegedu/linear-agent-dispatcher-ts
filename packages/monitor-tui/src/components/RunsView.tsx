@@ -57,6 +57,7 @@ export function RunsView({
       ? 7 +
         lines(selected.issueTitle || '(no title)') -
         1 +
+        (selected.triggerSource === 'scan' ? 1 : 0) +
         (selected.errorSnippet ? 2 + lines(selected.errorSnippet) : 0)
       : 0;
 
@@ -175,7 +176,10 @@ export function RunsView({
                   {cell(run.domainLabel, repoW, showRepo)}
                   <span attributes={1}>{fit(run.issueIdentifier || '—', issueW)}</span>
                   {'  '}
-                  {fit(run.issueTitle || '(no title)', titleW)}
+                  {fit(
+                    `${run.triggerSource === 'scan' ? '↻ ' : ''}${run.issueTitle || '(no title)'}`,
+                    titleW,
+                  )}
                   {'  '}
                   <span fg={colors.muted}>{cell(`/${run.skill}`, skillW, showSkill)}</span>
                   <span fg={run.status === 'running' ? colors.running : colors.muted}>
@@ -220,6 +224,11 @@ export function RunsView({
             <span fg={colors.muted}>{fit('Run ID', 9)}</span>
             {selected.id}
           </text>
+          {selected.triggerSource === 'scan' ? (
+            <text wrapMode="none" truncate>
+              <span fg={colors.muted}>{fit('Source', 9)}</span>↻ scanner
+            </text>
+          ) : null}
           <text wrapMode="none" truncate>
             <span fg={colors.muted}>{fit('Started', 9)}</span>
             {new Date(selected.startedAt).toLocaleString()}

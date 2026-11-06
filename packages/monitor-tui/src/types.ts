@@ -12,6 +12,8 @@ export interface Run {
   startedAt: string;
   finishedAt?: string;
   errorSnippet?: string;
+  // 'scan' when the dispatcher's scanner started it; 'webhook' or 'label' otherwise.
+  triggerSource?: string;
 }
 
 export interface MonitorSummary {
@@ -47,14 +49,47 @@ export interface RelayFormField {
   required?: boolean;
 }
 
-export interface RelayTabProps {
+/** What the Overview needs to open the relay connect and update forms. */
+export interface RelayActions {
   onRunScript: (script: RelayScript, args: string[]) => void;
   mode: 'idle' | 'connect' | 'update';
   setMode: (mode: 'idle' | 'connect' | 'update') => void;
-  relayHealth: RelayHealth | null;
 }
 
 export interface AppProps {
   onExit: () => void;
   onRunRelayScript: (script: RelayScript, args: string[]) => void;
+}
+
+export type ScanOutcome =
+  | 'dispatched'
+  | 'active'
+  | 'done'
+  | 'needs_input'
+  | 'cancelled'
+  | 'exhausted'
+  | 'waiting'
+  | 'skipped'
+  | 'closed';
+
+export interface ScanIssue {
+  identifier: string;
+  title: string;
+  skill?: string;
+  outcome: ScanOutcome;
+  detail?: string;
+}
+
+export interface ScannerReport {
+  enabled: boolean;
+  intervalSec?: number;
+  lastScanAt?: string;
+  durationMs?: number;
+  scopes: Array<{
+    name: string;
+    maxConcurrent: number;
+    inFlight: number;
+    error?: string;
+    watches: Array<{ label: string; states: string[]; issues: ScanIssue[] }>;
+  }>;
 }

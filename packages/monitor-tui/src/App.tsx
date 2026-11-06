@@ -95,7 +95,7 @@ export function App({ onExit, onRunRelayScript }: AppProps): React.ReactNode {
   );
 
   const globalHints = [
-    ['1-4', 'views'],
+    [`1-${TABS.length}`, 'views'],
     ['y', 'copy'],
     ['m', mouseOn ? 'mouse off' : 'mouse on'],
     ['^R', 'restart'],
