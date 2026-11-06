@@ -45,6 +45,12 @@ describe('runs', () => {
     expect(filterRuns(runs, 'done').map((r) => r.id)).toEqual(['5', '6']);
   });
 
+  test('treats a stopped run as done', () => {
+    const runs = [run('7', 'cancelled')];
+    expect(filterRuns(runs, 'done').map((r) => r.id)).toEqual(['7']);
+    expect(filterRuns(runs, 'failed')).toEqual([]);
+  });
+
   test('counts each filter', () => {
     expect(filterCounts(allRuns(snapshot))).toEqual({
       all: 6,

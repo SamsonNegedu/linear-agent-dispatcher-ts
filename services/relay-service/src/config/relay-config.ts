@@ -18,7 +18,8 @@ export const loadRelayConfig = (): RelayServiceConfig => {
   const clientId = process.env.LINEAR_OAUTH_CLIENT_ID;
   const clientSecret = process.env.LINEAR_OAUTH_CLIENT_SECRET;
   const webhookSecret = process.env.LINEAR_WEBHOOK_SECRET;
-  const apiKey = process.env.LINEAR_API_KEY;
+  // The relay reads issues for agent-session routing; the app OAuth token works for that, so it wins.
+  const apiKey = process.env.LINEAR_AGENT_TOKEN || process.env.LINEAR_API_KEY;
   const baseUrl = process.env.RELAY_BASE_URL || '';
 
   if (!clientId) {

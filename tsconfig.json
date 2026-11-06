@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "CommonJS",
+    "module": "NodeNext",
     "lib": ["ES2020", "DOM"],
     "types": ["node"],
-    "moduleResolution": "node",
+    "moduleResolution": "NodeNext",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -17,19 +17,18 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "baseUrl": ".",
     "noEmitOnError": false,
     "typeRoots": ["./node_modules/@types"],
     "paths": {
-      "@webhook-verify/core": ["packages/webhook-verify/src"],
-      "@webhook-verify/core/*": ["packages/webhook-verify/src/*"],
-      "@linear-agent/env-file": ["packages/env-file/src"],
-      "@linear-agent/linear-client": ["packages/linear-client/src"],
-      "@linear-agent/linear-client/*": ["packages/linear-client/src/*"],
-      "@dispatcher/*": ["services/dispatcher-service/src/*"],
-      "@relay/*": ["services/relay-service/src/*"]
+      "@webhook-verify/core": ["./packages/webhook-verify/src"],
+      "@webhook-verify/core/*": ["./packages/webhook-verify/src/*"],
+      "@linear-agent/env-file": ["./packages/env-file/src"],
+      "@linear-agent/linear-client": ["./packages/linear-client/src"],
+      "@linear-agent/linear-client/*": ["./packages/linear-client/src/*"],
+      "@dispatcher/*": ["./services/dispatcher-service/src/*"],
+      "@relay/*": ["./services/relay-service/src/*"]
     }
   },
-  "include": ["packages/*/src", "services/*/src"],
+  "include": ["./packages/*/src", "services/*/src"],
   "exclude": ["node_modules", "dist"]
 }

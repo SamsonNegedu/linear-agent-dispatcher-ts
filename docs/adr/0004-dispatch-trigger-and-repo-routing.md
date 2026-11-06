@@ -77,7 +77,10 @@ applies the same rules, plus the `skipDoneIssues` policy below:
    some real field changed, of any kind. Stage 2 still decides separately
    whether the issue's labels route anywhere. Delegate assignment is an
    `Issue` `update` with `changedFields: ['delegateId']`. It takes this path,
-   not the `AgentSession` path in rule 1.
+   not the `AgentSession` path in rule 1. Removing the delegate is the user
+   taking the agent off the issue, so the parser leaves `delegateId` out of
+   `changedFields` when the issue has no delegate left. An update that only
+   removes the delegate then dispatches nothing.
 4. Anything else does not dispatch.
 
 Stage 1 only answers "is there a reason to look at this webhook at all." It
@@ -156,16 +159,17 @@ and `issueIdentifier: ''`, because Linear's agent-session envelope does not
 include either. Left alone, every `AgentSession` dispatch would fail Stage 2
 with zero domain labels.
 
-`DispatcherService` fixes this by calling `resolveIssueContext(issueId, webhookLabels)`
-before it resolves routing. The real implementation is on `LinearGraphQLClient`
+`DispatcherService` fixes this by asking the issue-context resolver registered for
+`event.provider` to `resolveIssueContext(event)` before it resolves routing. For Linear
+that is `LinearIssueContextResolver`, a thin wrapper over `LinearGraphQLClient`
 (`packages/linear-client`). If the webhook supplies fewer than
 `MIN_LABEL_COUNT_FOR_FALLBACK` (2) labels, the client fetches the issue's real
 labels and identifier from the Linear API. If that fetch fails, it falls back to
-the webhook labels, so an API outage does not block routing.
+the webhook labels, so an API outage does not block routing. A provider with no
+resolver registered uses the webhook's own tags.
 
-Without a Linear API key, the dispatcher uses `NullIssueContextResolver`, which
-returns the webhook labels unchanged. `AgentSession` dispatches then always
-fail label validation.
+Without Linear credentials, `LinearIssueContextResolver` has no client and returns the
+webhook labels unchanged. `AgentSession` dispatches then always fail label validation.
 
 ## Consequences
 
@@ -210,11 +214,11 @@ fail label validation.
 
 **Trigger semantics (Stage 1):**
 
-| Approach                                                                      | Rejected because                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Require `labelChange.added` non-empty (first attempt)                         | Went too far: blocked delegate assignment and any other legitimate non-label trigger; see Context                                                                                                       |
+| Approach                                                                      | Rejected because                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Require `labelChange.added` non-empty (first attempt)                         | Went too far: blocked delegate assignment and any other legitimate non-label trigger; see Context                                                                                                        |
 | Track the webhook actor and skip self-authored updates                        | The dispatcher would need to know its own bot/OAuth user identity (a lookup plus a cache). That is dispatcher-specific config, and does not belong in the generic webhook-parsing layer the relay shares |
-| Time-based debounce (ignore updates within N seconds of our own last comment) | Cannot tell cause from coincidence: a real human edit seconds after a bot comment would also be dropped. It swaps a structural rule for a timing-dependent failure                                      |
+| Time-based debounce (ignore updates within N seconds of our own last comment) | Cannot tell cause from coincidence: a real human edit seconds after a bot comment would also be dropped. It swaps a structural rule for a timing-dependent failure                                       |
 
 **Routing (Stage 2):**
 

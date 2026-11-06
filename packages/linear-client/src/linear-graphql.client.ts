@@ -1,4 +1,5 @@
-import { LinearClient } from '@linear/sdk';
+import { LinearClient, PaginationOrderBy } from '@linear/sdk';
+import type { TokenSource } from './app-token-provider.js';
 import type {
   ActivityType,
   LinearUserInfo,
@@ -6,6 +7,8 @@ import type {
   IssueLabelsResponse,
   IssueContext,
   LinearClientLogger,
+  ListIssuesQuery,
+  ScannedIssue,
 } from './types.js';
 
 /**
@@ -19,18 +22,53 @@ const MIN_LABEL_COUNT_FOR_FALLBACK = 2;
  * Shared Linear API client for both relay and dispatcher services.
  * Wraps @linear/sdk for issue/activity/comment operations used by webhook routing.
  */
-export class LinearGraphQLClient {
-  private readonly client: LinearClient;
+// An expired or revoked token surfaces as this SDK error type or message.
+const isAuthError = (error: unknown): boolean => {
+  const { type, message } = (error ?? {}) as { type?: string; message?: string };
+  return (
+    type === 'AuthenticationError' ||
+    /authentication required|not authenticated/i.test(message ?? '')
+  );
+};
 
+const newSdkClient = (token: string): LinearClient =>
+  // Personal API keys (lin_api_...) and OAuth access tokens (lin_oauth_...) authenticate
+  // differently; sending an OAuth token as an apiKey is rejected as "Authentication required".
+  token.startsWith('lin_oauth_')
+    ? new LinearClient({ accessToken: token })
+    : new LinearClient({ apiKey: token });
+
+export class LinearGraphQLClient {
+  private sdkClient?: { token: string; client: LinearClient };
+
+  /**
+   * `credential` is a fixed token or API key, or a TokenSource that supplies a current token for
+   * each request. With a TokenSource, a request rejected as unauthenticated is retried once on a
+   * fresh token.
+   */
   constructor(
-    private readonly apiKey: string,
+    private readonly credential: string | TokenSource,
     private readonly logger?: LinearClientLogger,
-  ) {
-    // Personal API keys (lin_api_...) and OAuth access tokens (lin_oauth_...) authenticate
-    // differently; sending an OAuth token as an apiKey is rejected as "Authentication required".
-    this.client = apiKey.startsWith('lin_oauth_')
-      ? new LinearClient({ accessToken: apiKey })
-      : new LinearClient({ apiKey });
+    /** Test seam: how a token becomes an SDK client. */
+    private readonly createSdk: (token: string) => LinearClient = newSdkClient,
+  ) {}
+
+  private async sdk(): Promise<LinearClient> {
+    const token =
+      typeof this.credential === 'string' ? this.credential : await this.credential.getToken();
+    if (this.sdkClient?.token !== token) this.sdkClient = { token, client: this.createSdk(token) };
+    return this.sdkClient.client;
+  }
+
+  private async call<T>(operation: (client: LinearClient) => Promise<T>): Promise<T> {
+    try {
+      return await operation(await this.sdk());
+    } catch (error) {
+      if (typeof this.credential === 'string' || !isAuthError(error)) throw error;
+      this.logger?.warn('Linear rejected the app token; fetching a new one and retrying once');
+      this.credential.invalidate();
+      return operation(await this.sdk());
+    }
   }
 
   /**
@@ -38,7 +76,7 @@ export class LinearGraphQLClient {
    * Used during OAuth flow in relay-service
    */
   async getUserInfo(accessToken: string): Promise<LinearUserInfo> {
-    const client = accessToken ? new LinearClient({ accessToken }) : this.client;
+    const client = accessToken ? new LinearClient({ accessToken }) : await this.sdk();
 
     const viewer = await client.viewer;
     if (!viewer?.id) {
@@ -62,6 +100,12 @@ export class LinearGraphQLClient {
     };
   }
 
+  /** Who these credentials act as. `app` is true for an app user, which agent sessions require. */
+  async getViewer(): Promise<{ name: string; app: boolean }> {
+    const viewer = await this.call((client) => client.viewer);
+    return { name: viewer.name, app: viewer.app };
+  }
+
   /**
    * Create an activity in a Linear agent session
    * Used by dispatcher-service for activity posting
@@ -76,10 +120,9 @@ export class LinearGraphQLClient {
     }
 
     try {
-      const response = await this.client.createAgentActivity({
-        agentSessionId,
-        content: { type, body },
-      });
+      const response = await this.call((client) =>
+        client.createAgentActivity({ agentSessionId, content: { type, body } }),
+      );
 
       if (!response.agentActivityId) {
         throw new Error('No activity ID returned from Linear API');
@@ -105,7 +148,7 @@ export class LinearGraphQLClient {
     }
 
     try {
-      const response = await this.client.createComment({ issueId, body });
+      const response = await this.call((client) => client.createComment({ issueId, body }));
 
       if (!response.commentId) {
         throw new Error('No comment ID returned from Linear API');
@@ -163,18 +206,83 @@ export class LinearGraphQLClient {
       throw new Error('issueId is required');
     }
 
-    const issue = await this.client.issue(issueId);
-    if (!issue) {
-      return {};
-    }
-
-    const [assignee, team] = await Promise.all([issue.assignee, issue.team]);
+    const { assignee, team } = await this.call(async (client) => {
+      const issue = await client.issue(issueId);
+      return { assignee: await issue?.assignee, team: await issue?.team };
+    });
 
     return {
       assigneeId: assignee?.id,
       teamId: team?.id,
       teamKey: team?.key,
     };
+  }
+
+  /** The workspace the credentials belong to; webhooks carry it, scanned issues do not. */
+  async getOrganizationId(): Promise<string> {
+    const organization = await this.call((client) => client.organization);
+    return organization.id;
+  }
+
+  /**
+   * Issues in a project or team that carry `label` and sit in one of `states`, oldest first. Used by the
+   * dispatcher's scanner to find work without waiting for a webhook.
+   */
+  async listLabeledIssues(query: ListIssuesQuery): Promise<ScannedIssue[]> {
+    return this.call(async (client) => {
+      const connection = await client.issues({
+        first: query.limit,
+        orderBy: PaginationOrderBy.CreatedAt,
+        filter: {
+          ...(query.projectId ? { project: { id: { eq: query.projectId } } } : {}),
+          ...(query.teamKey ? { team: { key: { eq: query.teamKey } } } : {}),
+          labels: { name: { eq: query.label } },
+          state: { name: { in: query.states } },
+        },
+      });
+
+      return Promise.all(
+        connection.nodes.map(async (issue) => {
+          const [labels, state, team] = await Promise.all([
+            issue.labels(),
+            issue.state,
+            issue.team,
+          ]);
+          return {
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+            labels: labels.nodes.map((l) => l.name),
+            teamKey: team?.key,
+            assigneeId: issue.assigneeId ?? undefined,
+            isTerminal: state?.type === 'completed' || state?.type === 'canceled',
+          };
+        }),
+      );
+    });
+  }
+
+  /**
+   * When the issue last became a candidate for `label`: the later of the label being added and the
+   * issue moving into the state it is in now. Undefined when its history says neither (the label
+   * and state date from creation, or are older than the page fetched). Lets the scanner treat an
+   * issue that had the label taken off and put back, or left its state and returned, as new work.
+   */
+  async getWatchStartedAt(issueId: string, label: string): Promise<Date | undefined> {
+    return this.call(async (client) => {
+      const issue = await client.issue(issueId);
+      if (!issue) return undefined;
+      const labelId = (await issue.labels()).nodes.find((l) => l.name === label)?.id;
+      const history = await issue.history({ first: 50 });
+      const times = history.nodes
+        .filter(
+          (entry) =>
+            (issue.stateId !== undefined && entry.toStateId === issue.stateId) ||
+            (labelId !== undefined && entry.addedLabelIds?.includes(labelId)),
+        )
+        .map((entry) => entry.createdAt.getTime());
+      return times.length ? new Date(Math.max(...times)) : undefined;
+    });
   }
 
   /**
@@ -186,16 +294,16 @@ export class LinearGraphQLClient {
       throw new Error('issueId is required');
     }
 
-    const issue = await this.client.issue(issueId);
-    if (!issue) {
-      return { labels: [] };
-    }
+    return this.call(async (client) => {
+      const issue = await client.issue(issueId);
+      if (!issue) return { labels: [] };
 
-    const labelsConnection = await issue.labels();
-    const labelNames = labelsConnection.nodes
-      .map((label) => label.name)
-      .filter((name): name is string => !!name && typeof name === 'string');
+      const labelsConnection = await issue.labels();
+      const labelNames = labelsConnection.nodes
+        .map((label) => label.name)
+        .filter((name): name is string => !!name && typeof name === 'string');
 
-    return { labels: labelNames, identifier: issue.identifier };
+      return { labels: labelNames, identifier: issue.identifier };
+    });
   }
 }

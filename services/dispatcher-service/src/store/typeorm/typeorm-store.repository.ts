@@ -3,11 +3,11 @@ import { DataSource, Repository, LessThan, MoreThanOrEqual } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { RunEntity } from './run.entity';
 import { ProcessedWebhookEntity } from './processed-webhook.entity';
-import type { IStoreRepository, Run, EnqueueRunInput, CompleteRunInput } from '../store.interfaces';
+import type { StoreRepository, Run, EnqueueRunInput, CompleteRunInput } from '../store.interfaces';
 import { DuplicatePayloadError, ActiveRunError, RecentDuplicateRunError } from '../store.errors';
 
 @Injectable()
-export class TypeORMStoreRepository implements IStoreRepository {
+export class TypeORMStoreRepository implements StoreRepository {
   private runRepository: Repository<RunEntity>;
   private webhookRepository: Repository<ProcessedWebhookEntity>;
 
@@ -130,6 +130,25 @@ export class TypeORMStoreRepository implements IStoreRepository {
     return runs.map((r) => this.entityToRun(r));
   }
 
+  async countRunsByStatus(
+    provider: string,
+    issueId: string,
+    skill?: string,
+    since?: Date,
+  ): Promise<Partial<Record<Run['status'], number>>> {
+    const runs = await this.runRepository.find({
+      where: {
+        provider,
+        issueId,
+        ...(skill ? { skill } : {}),
+        ...(since ? { startedAt: MoreThanOrEqual(since) } : {}),
+      },
+    });
+    const counts: Partial<Record<Run['status'], number>> = {};
+    for (const run of runs) counts[run.status] = (counts[run.status] ?? 0) + 1;
+    return counts;
+  }
+
   async hasActiveRun(provider: string, issueId: string): Promise<boolean> {
     const run = await this.runRepository.findOne({
       where: {
@@ -164,7 +183,7 @@ export class TypeORMStoreRepository implements IStoreRepository {
     );
   }
 
-  async reconcileStaleRuns(olderThanMs: number): Promise<void> {
+  async reconcileStaleRuns(olderThanMs: number, reason?: string): Promise<void> {
     const cutoff = new Date(Date.now() - olderThanMs);
     const staleRuns = await this.runRepository.find({
       where: [
@@ -182,7 +201,9 @@ export class TypeORMStoreRepository implements IStoreRepository {
     for (const run of staleRuns) {
       await this.completeRun(run.id, {
         status: 'failed',
-        errorSnippet: `Stale run reconciliation: no heartbeat (${Math.round((Date.now() - run.startedAt.getTime()) / 1000)}s old)`,
+        errorSnippet:
+          reason ??
+          `Stale run reconciliation: no heartbeat (${Math.round((Date.now() - run.startedAt.getTime()) / 1000)}s old)`,
       });
     }
   }
@@ -205,6 +226,7 @@ export class TypeORMStoreRepository implements IStoreRepository {
       succeeded: 0,
       failed: 0,
       needs_input: 0,
+      cancelled: 0,
     };
 
     let lastWebhookAt: Date | null = null;

@@ -1,5 +1,6 @@
 export interface WebhookResponse {
   received: boolean;
+  webhookId?: string;
   message?: string;
   error?: string;
   subscribersNotified?: number;

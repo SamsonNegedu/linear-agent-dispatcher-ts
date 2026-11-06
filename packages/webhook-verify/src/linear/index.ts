@@ -22,6 +22,7 @@ export interface LabelChange {
 export interface VerifiedEvent {
   webhookId: string;
   idempotencyKey: string;
+  /** When Linear sent this delivery (webhookTimestamp), else when the event happened. For replay checks. */
   timestamp: number;
   teamId: string;
   teamKey?: string;
@@ -65,9 +66,15 @@ const label = z.union([
   z.object({ id: z.string().optional(), name: z.string().optional() }),
 ]);
 
+// `webhookTimestamp` is when Linear sent this delivery; `createdAt` is when the event happened and
+// does not change on a retry. Replay protection must look at the former: a retry an hour later is
+// a legitimate delivery of an old event.
+const webhookTimestamp = z.number().nullish();
+
 const issueEnvelope = z.object({
   webhookId: z.string().min(1),
   createdAt: timestamp,
+  webhookTimestamp,
   action: z.string().optional(),
   organizationId: z.string().optional(),
   // Previous values of the fields that changed; only present on "update" events.
@@ -79,6 +86,9 @@ const issueEnvelope = z.object({
     teamId: z.string().optional(),
     team: z.object({ id: z.string().optional(), key: z.string().optional() }).nullish(),
     assignee: objectWithId,
+    // The agent the issue is delegated to; null once the delegate is removed.
+    delegateId: z.string().nullish(),
+    delegate: objectWithId,
     organization: objectWithId,
     state: z.object({ type: z.string().optional() }).nullish(),
     labels: z.array(label).catch([]),
@@ -91,6 +101,7 @@ const issueEnvelope = z.object({
 
 const agentSessionEnvelope = z.object({
   createdAt: timestamp,
+  webhookTimestamp,
   action: z.string().optional(),
   organizationId: z.string().min(1),
   agentSession: z.object({ id: z.string().min(1), issueId: z.string().min(1) }),
@@ -133,13 +144,21 @@ const parseIssueWebhook = (payload: unknown): VerifiedEvent => {
   // envelope's `createdAt` is per-delivery and unchanged on Linear's retries, so
   // issue + action + createdAt dedupes true retries but not distinct events.
   const ts = new Date(envelope.createdAt).getTime();
+  const sentAt = envelope.webhookTimestamp ?? ts;
 
   // Whether anything on the issue actually changed. A webhook whose `updatedFrom` holds only
   // `updatedAt` means a side effect such as a comment bumped the timestamp.
   let changedFields: string[] | undefined;
   let labelChange: LabelChange | undefined;
   if (type === 'Issue') {
-    if (updatedFrom) changedFields = Object.keys(updatedFrom).filter((key) => key !== 'updatedAt');
+    // Taking the delegate off an issue is the user stopping the agent, not asking it to run, so it
+    // is not a change worth reacting to. Assigning (or changing) a delegate still is.
+    const delegateRemoved = !issue.delegateId && !issue.delegate?.id;
+    if (updatedFrom) {
+      changedFields = Object.keys(updatedFrom).filter(
+        (key) => key !== 'updatedAt' && !(key === 'delegateId' && delegateRemoved),
+      );
+    }
 
     // `updatedFrom` has only bare `labelIds`, so added label names come from diffing them
     // against the current labels.
@@ -157,7 +176,7 @@ const parseIssueWebhook = (payload: unknown): VerifiedEvent => {
   return {
     webhookId: envelope.webhookId,
     idempotencyKey: `issue:${issueId}:${action}:${ts}`,
-    timestamp: ts,
+    timestamp: sentAt,
     teamId,
     teamKey: issue.team?.key,
     assigneeId: issue.assignee?.id,
@@ -182,13 +201,14 @@ const parseAgentSessionWebhook = (payload: unknown): VerifiedEvent => {
   const { agentSession: session, ...envelope } = parseOrThrow(agentSessionEnvelope, payload);
   const action = envelope.action as IssueAction | AgentSessionAction | undefined;
   const ts = new Date(envelope.createdAt).getTime();
+  const sentAt = envelope.webhookTimestamp ?? ts;
 
   return {
     webhookId: session.id,
     // session.id is constant across a session's lifecycle (created -> prompted), so it alone
     // isn't a per-event key; pair it with the action and delivery time.
     idempotencyKey: `session:${session.id}:${action}:${ts}`,
-    timestamp: ts,
+    timestamp: sentAt,
     teamId: '',
     issueId: session.issueId,
     issueIdentifier: '',

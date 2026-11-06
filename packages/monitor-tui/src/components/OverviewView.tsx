@@ -1,12 +1,17 @@
 import React from 'react';
-import { useTerminalDimensions } from '@opentui/react';
+import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { statusColor, type RunStatus } from '../theme';
 import { useTheme } from '../theme-context';
 import type { MonitorSnapshot } from '../services/monitor-api.service';
 import { getConfig } from '../utils/config';
-import { columnWidths, fit } from '../utils/format';
+import { columnWidths, fit, pad } from '../utils/format';
 import { relayConnectionStatus } from '../utils/relay-status';
+import type { RelayActions } from '../types';
+import { RelayActionForm } from './RelayActionForm';
 import { Panel } from './ui';
+
+// Width of the label column in the Relay panel.
+const RELAY_LABEL_W = 12;
 
 // Room kept for the status text after a skill ("✗ not found in repo").
 const STATUS_W = 20;
@@ -23,11 +28,32 @@ const TILES: ReadonlyArray<{
   { label: 'Done', status: 'succeeded', count: (s) => s.summary.counts.succeeded },
 ];
 
-export function OverviewView({ snapshot }: { snapshot: MonitorSnapshot }): React.ReactNode {
+export function OverviewView({
+  snapshot,
+  relay: relayActions,
+}: {
+  snapshot: MonitorSnapshot;
+  relay: RelayActions;
+}): React.ReactNode {
   const colors = useTheme();
   const { width } = useTerminalDimensions();
-  const { relayEnabled, relayUrl, dispatcherUrl } = getConfig();
+  const {
+    relayEnabled,
+    relayUrl,
+    dispatcherUrl,
+    relaySubscriberId: subscriberId,
+    relaySubscriberSecret: secret,
+  } = getConfig();
+  const secretDisplay = secret ? `${secret.slice(0, 6)}...${secret.slice(-4)}` : '(none)';
+  const { mode, setMode } = relayActions;
+  useKeyboard((key) => {
+    if (mode !== 'idle') return;
+    if (key.name === 'c') setMode('connect');
+    if (key.name === 'u') setMode('update');
+  });
   const relay = relayConnectionStatus(relayEnabled, snapshot.relayHealth, colors);
+  if (mode !== 'idle') return <RelayActionForm {...relayActions} />;
+
   const narrow = width < 100;
   const [repoW, labelW, skillW] = columnWidths(width - 6, [
     narrow ? 16 : 22,
@@ -61,14 +87,23 @@ export function OverviewView({ snapshot }: { snapshot: MonitorSnapshot }): React
         })}
       </box>
 
-      <Panel title="Relay" grow={false}>
+      <Panel title="Relay · c connect · u update" grow={false}>
         <text wrapMode="none" truncate>
           <span fg={relay.color}>● {relay.label}</span>
-          <span fg={colors.muted}>{'   '}relay </span>
-          {relayUrl || '(not set)'}
-          <span fg={colors.muted}>{'   '}dispatcher </span>
-          {dispatcherUrl || '(not tracked)'}
         </text>
+        {(
+          [
+            ['Relay', relayUrl || '(not set)'],
+            ['Dispatcher', dispatcherUrl || '(not tracked)'],
+            ['Subscriber', subscriberId || '(none)'],
+            ['Secret', secretDisplay],
+          ] as const
+        ).map(([label, value]) => (
+          <text key={label} wrapMode="none" truncate>
+            <span fg={colors.muted}>{pad(`${label}`, RELAY_LABEL_W)}</span>
+            {value}
+          </text>
+        ))}
       </Panel>
 
       <Panel title="Repositories">

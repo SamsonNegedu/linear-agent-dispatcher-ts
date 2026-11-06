@@ -2,7 +2,7 @@
 
 ## 1. Prerequisites
 
-- Node.js 24+, pnpm 9+, [bun](https://bun.sh) (for the monitor TUI)
+- Node.js 26+, pnpm 9+, [bun](https://bun.sh) (for the monitor TUI)
 - `claude` CLI on your `$PATH` and logged in
 - A way to expose the relay: [Tailscale](https://tailscale.com/download) (recommended, stable URL) or `cloudflared` (random URL each run)
 - A Linear OAuth app (client ID, client secret, webhook secret)
@@ -59,7 +59,7 @@ On a Linear issue, set the repo's label (e.g. `api`) plus one mode label (e.g. `
 
 ## 4. The monitor TUI
 
-Four views: **Overview** (counts, relay status, each repo's label → skill with ✓/✗), **Runs**, **Logs** and **Relay**. The header shows live counts; a runs tab marker `●1` means a run is waiting for your answer.
+Four views: **Overview** (counts, relay status with `c` connect and `u` update, each repo's label → skill with ✓/✗), **Runs**, **Scanner** (what the label scanner did on its last pass, and why each issue was or wasn't started) and **Logs**. The header shows live counts; a runs tab marker `●1` means a run is waiting for your answer.
 
 | Key                       | Action                                                                                            |
 | ------------------------- | ------------------------------------------------------------------------------------------------- |

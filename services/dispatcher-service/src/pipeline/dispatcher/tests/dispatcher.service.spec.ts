@@ -2,8 +2,10 @@ import { AdapterRegistry, IncompleteLabelsError, ValidationError } from '@webhoo
 import type { DispatchAdapter, NormalizedEvent } from '@webhook-verify/core';
 import { DispatcherService } from '../dispatcher.service';
 import { ExecutorService } from '../../executor/executor.service';
-import type { IStoreRepository } from '../../../store/store.interfaces';
-import type { IIssueContextResolver } from '../issue-context-resolver.interface';
+import type { Run, StoreRepository } from '../../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../../store/store.interfaces';
+import type { IssueContextResolver } from '../issue-context-resolver.interface';
+import { ISSUE_CONTEXT_RESOLVER_REGISTRY } from '../issue-context-resolver.interface';
 import { DuplicatePayloadError, ActiveRunError } from '../../../store/store.errors';
 import { baseRelayModuleTestBuilder } from '../../relay/tests/relay-module-test-utils';
 
@@ -27,10 +29,10 @@ function makeEvent(overrides: Partial<NormalizedEvent> = {}): NormalizedEvent {
 }
 
 describe('DispatcherService.dispatchWebhook', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let executorService: jest.Mocked<ExecutorService>;
   let dispatchAdapter: jest.Mocked<DispatchAdapter>;
-  let issueContextResolver: jest.Mocked<IIssueContextResolver>;
+  let issueContextResolver: jest.Mocked<IssueContextResolver>;
   let service: DispatcherService;
 
   beforeEach(async () => {
@@ -41,6 +43,7 @@ describe('DispatcherService.dispatchWebhook', () => {
       getLatestRunWithSessionForAgent: jest.fn(),
       listRuns: jest.fn(),
       listRunsByStatus: jest.fn(),
+      countRunsByStatus: jest.fn(),
       hasActiveRun: jest.fn(),
       markRunning: jest.fn(),
       completeRun: jest.fn(),
@@ -59,21 +62,27 @@ describe('DispatcherService.dispatchWebhook', () => {
       postSkipped: jest.fn(),
     };
     issueContextResolver = {
+      provider: 'linear',
       resolveIssueContext: jest.fn(),
     };
 
     const dispatchAdapterRegistry = new AdapterRegistry<DispatchAdapter>();
     dispatchAdapterRegistry.register(dispatchAdapter);
+    // A second provider with a dispatch adapter but no issue-context resolver.
+    dispatchAdapterRegistry.register({ ...dispatchAdapter, provider: 'other' });
+
+    const issueContextResolverRegistry = new AdapterRegistry<IssueContextResolver>();
+    issueContextResolverRegistry.register(issueContextResolver);
 
     const module = await baseRelayModuleTestBuilder()
-      .overrideProvider('IStoreRepository')
+      .overrideProvider(STORE_REPOSITORY)
       .useValue(store)
       .overrideProvider(ExecutorService)
       .useValue(executorService)
       .overrideProvider('DispatchAdapterRegistry')
       .useValue(dispatchAdapterRegistry)
-      .overrideProvider('IIssueContextResolver')
-      .useValue(issueContextResolver)
+      .overrideProvider(ISSUE_CONTEXT_RESOLVER_REGISTRY)
+      .useValue(issueContextResolverRegistry)
       .compile();
 
     service = module.get(DispatcherService);
@@ -134,6 +143,58 @@ describe('DispatcherService.dispatchWebhook', () => {
       }),
     );
     expect(executorService.executeRun).toHaveBeenCalledWith('run_1', event);
+  });
+
+  it('records a scanner event as triggerSource scan', async () => {
+    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'scan' });
+    issueContextResolver.resolveIssueContext.mockResolvedValue({
+      labels: ['repo-a', 'agent-implement'],
+    });
+    dispatchAdapter.resolveRouting.mockReturnValue({
+      repoLabel: 'repo-a',
+      repoPath: '/repos/repo-a',
+      skill: 'implement',
+      dedupeWindowMs: 60_000,
+    });
+    store.enqueueRun.mockResolvedValue({ id: 'run_1' } as Run);
+
+    await service.dispatchWebhook(makeEvent({ action: 'scan', changedFields: undefined }));
+
+    expect(store.enqueueRun).toHaveBeenCalledWith(
+      expect.objectContaining({ triggerSource: 'scan' }),
+    );
+  });
+
+  it('routes on the webhook tags when the provider has no issue-context resolver', async () => {
+    dispatchAdapter.shouldDispatch.mockReturnValue({ shouldDispatch: true, reason: 'created' });
+    dispatchAdapter.resolveRouting.mockReturnValue({
+      repoLabel: 'repo-a',
+      repoPath: '/repos/repo-a',
+      skill: 'implement',
+      dedupeWindowMs: 60_000,
+    });
+    store.enqueueRun.mockResolvedValue({
+      id: 'run_1',
+      provider: 'other',
+      issueId: 'issue_1',
+      issueIdentifier: 'ISSUE-1',
+      webhookId: 'wh_1',
+      domainLabel: 'repo-a',
+      repoPath: '/repos/repo-a',
+      skill: 'implement',
+      status: 'pending',
+      startedAt: new Date(),
+      triggerSource: 'webhook',
+    });
+
+    const event = makeEvent({ provider: 'other', routingTags: ['repo-a', 'agent-implement'] });
+    await service.dispatchWebhook(event);
+
+    expect(issueContextResolver.resolveIssueContext).not.toHaveBeenCalled();
+    expect(dispatchAdapter.resolveRouting).toHaveBeenCalledWith(
+      expect.objectContaining({ routingTags: ['repo-a', 'agent-implement'] }),
+    );
+    expect(store.enqueueRun).toHaveBeenCalledWith(expect.objectContaining({ provider: 'other' }));
   });
 
   it('silently skips when routing is incomplete (labels not yet set)', async () => {

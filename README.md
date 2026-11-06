@@ -16,7 +16,7 @@ Linear webhook → Relay (local, behind a tunnel) → Dispatcher → Claude CLI 
 
 ## Getting Started
 
-**Prerequisites:** Node.js 24+, pnpm 9+, Bun (monitor TUI), a Linear OAuth app, the Claude CLI, and Tailscale (recommended) or `cloudflared` for the tunnel.
+**Prerequisites:** Node.js 26+, pnpm 9+, Bun (monitor TUI), a Linear OAuth app, the Claude CLI, and Tailscale (recommended) or `cloudflared` for the tunnel.
 
 ```bash
 pnpm install
@@ -27,14 +27,14 @@ Full setup, environment variables and troubleshooting: [GETTING_STARTED.md](serv
 
 ## Commands
 
-| Command                 | Purpose                                                    |
-| ----------------------- | ---------------------------------------------------------- |
-| `pnpm dev:up`           | Start everything (`-- --reconnect` re-authorizes)          |
-| `pnpm dev`              | Relay and dispatcher only                                  |
-| `pnpm routes`           | Show repo → label → skill mappings (`routes add <path>`)   |
-| `pnpm test-webhook`     | Test dispatch without a Linear issue                       |
-| `pnpm build` / `test`   | Build / test all packages                                  |
-| `pnpm lint` / `format`  | oxlint / oxfmt                                             |
+| Command                | Purpose                                                  |
+| ---------------------- | -------------------------------------------------------- |
+| `pnpm dev:up`          | Start everything (`-- --reconnect` re-authorizes)        |
+| `pnpm dev`             | Relay and dispatcher only                                |
+| `pnpm routes`          | Show repo → label → skill mappings (`routes add <path>`) |
+| `pnpm test-webhook`    | Test dispatch without a Linear issue                     |
+| `pnpm build` / `test`  | Build / test all packages                                |
+| `pnpm lint` / `format` | oxlint / oxfmt                                           |
 
 ## More
 

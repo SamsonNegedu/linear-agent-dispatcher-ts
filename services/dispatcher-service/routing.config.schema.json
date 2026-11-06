@@ -21,6 +21,80 @@
       },
       "additionalProperties": false
     },
+    "scanner": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "intervalSec": {
+          "default": 60,
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 9007199254740991
+        },
+        "scopes": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "team": {
+                "description": "Team key, e.g. \"DLAI\"",
+                "type": "string",
+                "minLength": 1
+              },
+              "project": {
+                "description": "Linear project id",
+                "type": "string",
+                "minLength": 1
+              },
+              "watch": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[a-zA-Z0-9_-]+$"
+                    },
+                    "states": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": ["label", "states"],
+                  "additionalProperties": false
+                }
+              },
+              "maxConcurrent": {
+                "default": 1,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "maxAttempts": {
+                "default": 3,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["watch", "maxConcurrent", "maxAttempts"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["enabled", "intervalSec", "scopes"],
+      "additionalProperties": false
+    },
     "skills": {
       "type": "array",
       "items": {

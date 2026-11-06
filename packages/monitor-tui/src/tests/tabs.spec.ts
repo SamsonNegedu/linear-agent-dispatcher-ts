@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { MonitorSnapshot } from '../services/monitor-api.service';
-import type { Run } from '../types';
+import type { Run, ScannerReport } from '../types';
 import { TABS } from '../tabs';
 
 const run = (overrides: Partial<Run> = {}): Run => ({
@@ -14,6 +14,43 @@ const run = (overrides: Partial<Run> = {}): Run => ({
   startedAt: new Date(Date.now() - 90_000).toISOString(),
   ...overrides,
 });
+
+const scanner: ScannerReport = {
+  enabled: true,
+  intervalSec: 60,
+  lastScanAt: new Date().toISOString(),
+  durationMs: 120,
+  scopes: [
+    {
+      name: 'team:DLA',
+      maxConcurrent: 2,
+      inFlight: 1,
+      watches: [
+        {
+          label: 'agent-triage',
+          states: ['Triage'],
+          issues: [
+            {
+              identifier: 'DLA-1',
+              title: 'A',
+              skill: 'triage',
+              outcome: 'active',
+              detail: 'running',
+            },
+            {
+              identifier: 'DLA-2',
+              title: 'B',
+              skill: 'triage',
+              outcome: 'exhausted',
+              detail: '2 failed runs',
+            },
+            { identifier: 'DLA-3', title: 'C', outcome: 'skipped', detail: 'no repo label' },
+          ],
+        },
+      ],
+    },
+  ],
+};
 
 const snapshot: MonitorSnapshot = {
   summary: {
@@ -39,18 +76,24 @@ const snapshot: MonitorSnapshot = {
     subscriberCheck: 'verified',
     lastCheckedAt: null,
   },
+  scanner,
 };
 
 describe('TABS', () => {
   test('names are unique and in tab-bar order', () => {
     const names = TABS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names).toEqual(['Overview', 'Runs', 'Logs', 'Relay']);
+    expect(names).toEqual(['Overview', 'Runs', 'Scanner', 'Logs']);
   });
 
-  test('the Runs count is active runs (running + queued), and only it has one', () => {
+  test('Runs counts active runs and Scanner counts the runs it has going; no other tab has one', () => {
     const counts = Object.fromEntries(TABS.map((t) => [t.name, t.count?.(snapshot) ?? null]));
-    expect(counts).toEqual({ Overview: null, Runs: '3', Logs: null, Relay: null });
+    expect(counts).toEqual({
+      Overview: null,
+      Runs: '3',
+      Scanner: '1',
+      Logs: null,
+    });
   });
 
   test('Runs shows no count when nothing is active, and flags runs waiting for an answer', () => {
@@ -64,7 +107,9 @@ describe('TABS', () => {
     const runs = TABS.find((t) => t.name === 'Runs')!;
     expect(runs.count?.(idle)).toBeNull();
     expect(runs.alert?.(snapshot)).toBe(5);
-    expect(TABS.filter((t) => t.alert).map((t) => t.name)).toEqual(['Runs']);
+    expect(TABS.filter((t) => t.alert).map((t) => t.name)).toEqual(['Runs', 'Scanner']);
+    // The scanner flags issues it gave up on or that wait for an answer.
+    expect(TABS.find((t) => t.name === 'Scanner')!.alert?.(snapshot)).toBe(1);
   });
 
   test('every tab can produce copy text', () => {
@@ -72,10 +117,12 @@ describe('TABS', () => {
   });
 
   test('every tab documents its keys', () => {
+    expect(TABS.find((t) => t.name === 'Overview')!.hints.map(([key]) => key)).toEqual(['c', 'u']);
     expect(TABS.find((t) => t.name === 'Runs')!.hints.map(([key]) => key)).toEqual([
       '↑↓',
       '⏎',
       'f',
+      'x',
     ]);
     expect(TABS.find((t) => t.name === 'Logs')!.hints.map(([key]) => key)).toEqual([
       '↑↓',
@@ -91,5 +138,6 @@ describe('TABS', () => {
     expect(text('Runs')).toContain('Question:\nStop rule: which token?');
     expect(text('Runs')).toContain('Error:\nboom');
     expect(text('Overview')).toContain('agent-implement -> /implement');
+    expect(text('Scanner')).toContain('DLA-2\tB\t/triage\tGAVE UP (2 failed runs)');
   });
 });

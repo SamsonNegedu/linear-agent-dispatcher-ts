@@ -37,7 +37,7 @@ const MIN_RANK: Record<LevelFilter, number> = { all: 0, warn: 1, error: 2 };
 export const matchesLevel = (line: LogLine, filter: LevelFilter): boolean =>
   RANK[line.level] >= MIN_RANK[filter];
 
-export const LEVEL_FILTERS: readonly LevelFilter[] = ['all', 'warn', 'error'];
+const LEVEL_FILTERS: readonly LevelFilter[] = ['all', 'warn', 'error'];
 
 export const nextLevelFilter = (current: LevelFilter): LevelFilter =>
   LEVEL_FILTERS[(LEVEL_FILTERS.indexOf(current) + 1) % LEVEL_FILTERS.length];

@@ -7,7 +7,7 @@ export interface RelayConnectionStatus {
 }
 
 // Single source of truth for how "connected" gets rendered — both Dashboard
-// and RelayTab show a connection indicator, and used to compute it
+// and the Overview's relay panel show a connection indicator, and used to compute it
 // independently, which meant a fix to one silently left the other showing
 // stale state.
 export function relayConnectionStatus(

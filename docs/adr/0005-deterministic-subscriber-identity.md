@@ -62,10 +62,10 @@ updates the existing row. It does not create a second identity.
 
 ## Alternatives Considered
 
-| Approach                                                               | Rejected because                                                                                                                                                                                            |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Approach                                                                    | Rejected because                                                                                                                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Keep the endpoint-hashed ID, add TTL or stale-row cleanup for orphaned rows | Treats the symptom (registry bloat), not the cause (wrong identity key). Double delivery and signature mismatch would still happen after every re-registration until the stale row expired |
-| Keep endpoint-hashed ID, add a `PUT /subscribers/keepalive` + reap job | Same as above, plus meaningfully more infrastructure (new endpoint, scheduled Lambda, schema field) for a problem the identity-key fix removes outright                                                     |
+| Keep endpoint-hashed ID, add a `PUT /subscribers/keepalive` + reap job      | Same as above, plus meaningfully more infrastructure (new endpoint, scheduled Lambda, schema field) for a problem the identity-key fix removes outright                                    |
 
 ## References
 

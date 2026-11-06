@@ -41,8 +41,11 @@ export class ConfigValidatorService implements OnModuleInit {
     }
 
     // Linear config (optional for non-agent-session triggers)
-    if (!this.config.linear?.apiKey) {
-      warnings.push('LINEAR_API_KEY not set (activity posting to Linear will be skipped)');
+    const { apiKey, agentToken, oauthClientId, oauthClientSecret } = this.config.linear ?? {};
+    if (!apiKey && !agentToken && !(oauthClientId && oauthClientSecret)) {
+      warnings.push(
+        'No Linear credentials (set LINEAR_OAUTH_CLIENT_ID and LINEAR_OAUTH_CLIENT_SECRET; activity posting to Linear will be skipped)',
+      );
     }
 
     // Report errors

@@ -24,7 +24,7 @@ export function findSkill(repoPath: string, skill: string, home: string = homedi
   return location ? { status: 'found', location } : { status: 'missing' };
 }
 
-export const MODE_LABEL_PREFIX = 'agent-';
+const MODE_LABEL_PREFIX = 'agent-';
 
 /** The Linear label that triggers a skill: `agent-<name>`. */
 export function labelForSkill(skill: string): string {

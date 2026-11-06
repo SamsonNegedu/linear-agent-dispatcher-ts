@@ -50,6 +50,12 @@ such as the double-delivery bug fixed in
 second real run. The value comes from the `policy` block of
 `routing.config.json`.
 
+### A running run can be stopped from the monitor
+
+`POST /monitor/runs/:id/cancel` asks `ExecutorService.cancelRun` to stop a `running` run. `ClaudeAgentService` keeps a cancel handle for each live Claude process, keyed by run ID. Cancelling sends SIGTERM to the process group, then SIGKILL after the same 10-second grace as the timeout. When the process exits, `executeRun` records the run as `cancelled` and tells the user ("Run cancelled"). The endpoint answers 202 while the process is stopping, 404 for an unknown run, and 409 when the run is not running (finished, or queued with no process yet).
+
+The monitor TUI offers this on the Runs view: `x` asks, a second `x` confirms. A cancelled run counts as done, not failed, and is not retried.
+
 ### Policy rejections and bugs use different log markers
 
 When the store declines to enqueue, the dispatcher logs `[ACTION_SKIPPED]` for
@@ -58,10 +64,12 @@ designed, so the dispatcher posts no comment to the issue. When the webhook came
 
 ### Stale runs are reconciled on startup and every 5 minutes
 
-`StaleRunReconciliationService` calls `reconcileStaleRuns` on module init and
-every 5 minutes after. Any run stuck in `pending` or `running` for longer than
-`config.executor.timeout` becomes `failed`. This frees an issue blocked by a
-crash. The dispatcher runs continuously, so no external cron is needed.
+`StaleRunReconciliationService` runs two kinds of sweep.
+
+- **On startup,** every run still `pending` or `running` from before this process started becomes `failed` ("Dispatcher restarted while the run was in progress"). A new process owns no Claude process, so those runs are orphans, and without this an issue stays blocked by `ActiveRunError` until the run timeout passes.
+- **Every 5 minutes,** any run stuck for longer than `config.executor.timeout` becomes `failed`. This catches a hang without a restart.
+
+`ClaudeAgentService` starts each Claude process in its own process group (`detached`), so the timeout and cancel signals reach Claude and the tools it started. Because those processes no longer die with the dispatcher, the service sends SIGTERM to every live one when the server shuts down.
 
 ### A failed webhook is skipped, not retried
 
@@ -135,11 +143,11 @@ duplicate-run window applies as usual.
 
 ## Alternatives Considered
 
-| Approach                                                             | Rejected because                                                                                                                                                                                    |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A per-issue same-day run cap, in addition to the options below       | Redundant. `duplicateRunWindowMs` and the one-active-run-per-issue check already prevent the failure a cap would catch                                                                             |
+| Approach                                                             | Rejected because                                                                                                                                                                        |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A per-issue same-day run cap, in addition to the options below       | Redundant. `duplicateRunWindowMs` and the one-active-run-per-issue check already prevent the failure a cap would catch                                                                  |
 | Retry failed webhook deliveries with backoff                         | Most failures here are not transient (validation errors, policy rejections, real bugs). Retry would not help and would duplicate the feedback already posted to Linear on first failure |
-| Kill only the direct child process on timeout, not the process group | Would miss subprocesses that Claude spawns, which is the risk a timeout must cover                                                                                                 |
+| Kill only the direct child process on timeout, not the process group | Would miss subprocesses that Claude spawns, which is the risk a timeout must cover                                                                                                      |
 
 ## References
 

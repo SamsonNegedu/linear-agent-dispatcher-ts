@@ -5,8 +5,10 @@ import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import { StoreModule } from '../../../store/store.module';
 import { ClaudeAgentService } from '../claude-agent.service';
 import { McpServerDiscoveryService } from '../mcp-server-discovery.service';
-import { RunFeedbackService } from '../run-feedback.service';
-import type { IStoreRepository, Run } from '../../../store/store.interfaces';
+import { LinearRunReporter } from '../linear-run-reporter';
+import type { RunReporter } from '../run-reporter';
+import type { StoreRepository, Run } from '../../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../../store/store.interfaces';
 import type { NormalizedEvent } from '@webhook-verify/core';
 
 function makeRun(overrides: Partial<Run> = {}): Run {
@@ -43,9 +45,9 @@ function makeEvent(): NormalizedEvent {
 }
 
 describe('ExecutorService.executeRun', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let claudeAgent: jest.Mocked<ClaudeAgentService>;
-  let feedback: jest.Mocked<RunFeedbackService>;
+  let feedback: jest.Mocked<RunReporter>;
   let service: ExecutorService;
 
   beforeEach(async () => {
@@ -53,26 +55,30 @@ describe('ExecutorService.executeRun', () => {
       getRun: jest.fn(),
       markRunning: jest.fn().mockResolvedValue(undefined),
       completeRun: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<IStoreRepository>;
-    claudeAgent = { spawn: jest.fn() } as unknown as jest.Mocked<ClaudeAgentService>;
+    } as unknown as jest.Mocked<StoreRepository>;
+    claudeAgent = {
+      spawn: jest.fn(),
+      cancel: jest.fn(),
+    } as unknown as jest.Mocked<ClaudeAgentService>;
     feedback = {
       started: jest.fn().mockResolvedValue(undefined),
       succeeded: jest.fn().mockResolvedValue(undefined),
       failed: jest.fn().mockResolvedValue(undefined),
       needsInput: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<RunFeedbackService>;
+      cancelled: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<RunReporter>;
 
     const module = await Test.createTestingModule({ imports: [ExecutorModule] })
       .overrideModule(StoreModule)
       .useModule(FakeStoreModule)
-      .overrideProvider('IStoreRepository')
+      .overrideProvider(STORE_REPOSITORY)
       .useValue(store)
       .overrideProvider(ClaudeAgentService)
       .useValue(claudeAgent)
       .overrideProvider(McpServerDiscoveryService)
       .useValue({ allowRules: jest.fn().mockResolvedValue([]) })
-      .overrideProvider(RunFeedbackService)
-      .useValue(feedback)
+      .overrideProvider(LinearRunReporter)
+      .useValue({ ...feedback, provider: 'linear' })
       .compile();
 
     service = module.get(ExecutorService);
@@ -164,5 +170,78 @@ describe('ExecutorService.executeRun', () => {
       expect.objectContaining({ status: 'failed', errorSnippet: 'spawn ENOENT' }),
     );
     expect(feedback.failed).toHaveBeenCalledWith(issueTarget, 'spawn ENOENT');
+  });
+});
+
+describe('ExecutorService cancellation', () => {
+  let store: jest.Mocked<StoreRepository>;
+  let claudeAgent: jest.Mocked<ClaudeAgentService>;
+  let feedback: jest.Mocked<RunReporter>;
+  let service: ExecutorService;
+
+  beforeEach(async () => {
+    store = {
+      getRun: jest.fn(),
+      markRunning: jest.fn().mockResolvedValue(undefined),
+      completeRun: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<StoreRepository>;
+    claudeAgent = {
+      spawn: jest.fn(),
+      cancel: jest.fn(),
+    } as unknown as jest.Mocked<ClaudeAgentService>;
+    feedback = {
+      started: jest.fn(),
+      cancelled: jest.fn(),
+    } as unknown as jest.Mocked<RunReporter>;
+
+    const module = await Test.createTestingModule({ imports: [ExecutorModule] })
+      .overrideModule(StoreModule)
+      .useModule(FakeStoreModule)
+      .overrideProvider(STORE_REPOSITORY)
+      .useValue(store)
+      .overrideProvider(ClaudeAgentService)
+      .useValue(claudeAgent)
+      .overrideProvider(McpServerDiscoveryService)
+      .useValue({ allowRules: jest.fn().mockResolvedValue([]) })
+      .overrideProvider(LinearRunReporter)
+      .useValue({ ...feedback, provider: 'linear' })
+      .compile();
+    service = module.get(ExecutorService);
+  });
+
+  it('cancelRun stops a running run', async () => {
+    store.getRun.mockResolvedValue(makeRun({ status: 'running' }));
+    claudeAgent.cancel.mockReturnValue(true);
+
+    await expect(service.cancelRun('run_1')).resolves.toBe('cancelling');
+    expect(claudeAgent.cancel).toHaveBeenCalledWith('run_1');
+  });
+
+  it('cancelRun reports not_found for an unknown run', async () => {
+    store.getRun.mockResolvedValue(null);
+
+    await expect(service.cancelRun('nope')).resolves.toBe('not_found');
+  });
+
+  it('cancelRun reports not_running for a finished run or one with no live process', async () => {
+    store.getRun.mockResolvedValue(makeRun({ status: 'succeeded' }));
+    await expect(service.cancelRun('run_1')).resolves.toBe('not_running');
+
+    store.getRun.mockResolvedValue(makeRun({ status: 'running' }));
+    claudeAgent.cancel.mockReturnValue(false);
+    await expect(service.cancelRun('run_1')).resolves.toBe('not_running');
+  });
+
+  it('executeRun records a cancelled result and tells the user, without a failure message', async () => {
+    store.getRun.mockResolvedValue(makeRun());
+    claudeAgent.spawn.mockResolvedValue({ status: 'cancelled', exitCode: undefined });
+
+    await service.executeRun('run_1', makeEvent());
+
+    expect(store.completeRun).toHaveBeenCalledWith(
+      'run_1',
+      expect.objectContaining({ status: 'cancelled' }),
+    );
+    expect(feedback.cancelled).toHaveBeenCalled();
   });
 });

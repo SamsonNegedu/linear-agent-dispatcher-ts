@@ -3,17 +3,18 @@ import { RelayDatabaseModule } from '../database/relay-database.module';
 import { AdapterRegistry } from '@webhook-verify/core';
 import type { WebhookIngestAdapter, RoutingResolver } from '@webhook-verify/core';
 import { LinearIngestAdapter } from '@webhook-verify/core/linear';
-import { LinearGraphQLClient } from '@linear-agent/linear-client';
+import { LinearGraphQLClient, chooseAppCredential } from '@linear-agent/linear-client';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
+import { WebhookForwarder } from './webhook-forwarder.service';
+import { WebhookIngestService } from './webhook-ingest.service';
 import {
   webhookDeliveriesProvider,
   WEBHOOK_DELIVERIES_REPOSITORY,
 } from './webhook-deliveries.provider';
 import { SubscriberModule } from '../subscriber/subscriber.module';
 import { LinearRoutingResolver } from './linear-routing.resolver';
-import { NullRoutingResolver } from './null-routing.resolver';
 import type { RelayServiceConfig } from '../config/relay-config';
 
 // Register one WebhookIngestAdapter per provider here. Each provider still
@@ -35,11 +36,10 @@ const routingResolverRegistryProvider: Provider = {
   provide: 'RoutingResolverRegistry',
   useFactory: (config: RelayServiceConfig) => {
     const registry = new AdapterRegistry<RoutingResolver>();
-    registry.register(
-      config.linear.apiKey
-        ? new LinearRoutingResolver(new LinearGraphQLClient(config.linear.apiKey))
-        : new NullRoutingResolver(),
-    );
+    const { oauthClientId, oauthClientSecret, apiKey } = config.linear;
+    const credential = chooseAppCredential({ oauthClientId, oauthClientSecret, apiKey });
+    const client = credential ? new LinearGraphQLClient(credential) : null;
+    registry.register(new LinearRoutingResolver(client));
     return registry;
   },
   inject: ['RelayServiceConfig'],
@@ -52,6 +52,8 @@ const routingResolverRegistryProvider: Provider = {
     webhookDeliveriesProvider,
     WebhookService,
     WebhookDeliveryService,
+    WebhookForwarder,
+    WebhookIngestService,
     ingestAdapterRegistryProvider,
     routingResolverRegistryProvider,
   ],

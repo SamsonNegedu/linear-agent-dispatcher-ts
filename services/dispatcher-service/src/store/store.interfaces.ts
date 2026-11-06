@@ -9,7 +9,8 @@ export interface Run {
   repoPath: string;
   skill: string;
   // needs_input: the agent stopped on purpose to ask a question (final reply starts with "Stop rule:")
-  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'needs_input';
+  // cancelled: stopped on purpose from the monitor before it finished
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'needs_input' | 'cancelled';
   claudeSessionId?: string;
   exitCode?: number;
   errorSnippet?: string;
@@ -41,13 +42,16 @@ export interface EnqueueRunInput {
 }
 
 export interface CompleteRunInput {
-  status: 'succeeded' | 'failed' | 'needs_input';
+  status: 'succeeded' | 'failed' | 'needs_input' | 'cancelled';
   claudeSessionId?: string;
   exitCode?: number;
   errorSnippet?: string;
 }
 
-export interface IStoreRepository {
+/** Injection token for the `StoreRepository` provider. */
+export const STORE_REPOSITORY = Symbol('StoreRepository');
+
+export interface StoreRepository {
   enqueueRun(input: EnqueueRunInput): Promise<Run>;
   getRun(id: string): Promise<Run | null>;
   getLatestRunWithSession(provider: string, issueId: string): Promise<Run | null>;
@@ -58,10 +62,17 @@ export interface IStoreRepository {
   ): Promise<Run | null>;
   listRuns(limit: number): Promise<Run[]>;
   listRunsByStatus(status: Run['status'], limit: number): Promise<Run[]>;
+  /** Runs of one issue by status, for one skill and since a time when given. */
+  countRunsByStatus(
+    provider: string,
+    issueId: string,
+    skill?: string,
+    since?: Date,
+  ): Promise<Partial<Record<Run['status'], number>>>;
   hasActiveRun(provider: string, issueId: string): Promise<boolean>;
   markRunning(id: string, pgid?: number): Promise<void>;
   completeRun(id: string, out: CompleteRunInput): Promise<void>;
-  reconcileStaleRuns(olderThanMs: number): Promise<void>;
+  reconcileStaleRuns(olderThanMs: number, reason?: string): Promise<void>;
   ping(): Promise<void>;
   getRunStats(
     sinceMs: number,

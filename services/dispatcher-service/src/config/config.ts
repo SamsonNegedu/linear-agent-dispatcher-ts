@@ -27,7 +27,16 @@ export interface DispatcherConfig {
     logging: boolean;
   };
   linear: {
+    /** Personal API key (lin_api_...): issue comments and issue lookups. */
     apiKey?: string;
+    /** App OAuth token (lin_oauth_...): agent-session activities, which Linear rejects for personal keys. */
+    agentToken?: string;
+    /**
+     * The Linear OAuth app's own credentials. When both are set the dispatcher mints and renews the
+     * app token itself, so no LINEAR_AGENT_TOKEN is needed.
+     */
+    oauthClientId?: string;
+    oauthClientSecret?: string;
   };
   preflight: {
     skip: boolean;
@@ -75,6 +84,9 @@ export const loadConfig = (): DispatcherConfig => {
     },
     linear: {
       apiKey: process.env.LINEAR_API_KEY,
+      agentToken: process.env.LINEAR_AGENT_TOKEN,
+      oauthClientId: process.env.LINEAR_OAUTH_CLIENT_ID,
+      oauthClientSecret: process.env.LINEAR_OAUTH_CLIENT_SECRET,
     },
     preflight: {
       skip: process.env.PREFLIGHT_SKIP === '1',

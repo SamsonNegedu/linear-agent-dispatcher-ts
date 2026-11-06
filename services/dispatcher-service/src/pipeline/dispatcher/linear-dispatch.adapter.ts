@@ -7,7 +7,7 @@ import type {
 } from '@webhook-verify/core';
 import { ValidationError, IncompleteLabelsError } from '@webhook-verify/core';
 import { RoutingConfigService } from '../../config/routing-config.service';
-import { RunFeedbackService } from '../executor/run-feedback.service';
+import type { RunReporter } from '../executor/run-reporter';
 
 /**
  * Everything Linear-specific about dispatching: whether a webhook triggers a run
@@ -21,7 +21,7 @@ export class LinearDispatchAdapter implements DispatchAdapter {
 
   constructor(
     private readonly routingConfig: RoutingConfigService,
-    private readonly feedback: RunFeedbackService,
+    private readonly feedback: RunReporter,
   ) {}
 
   /**
@@ -40,6 +40,10 @@ export class LinearDispatchAdapter implements DispatchAdapter {
         shouldDispatch: false,
         reason: 'issue state is terminal and policy.skipDoneIssues is enabled',
       };
+    }
+
+    if (event.action === 'scan') {
+      return { shouldDispatch: true, reason: 'found by the scanner' };
     }
 
     if (event.action === 'create') {

@@ -1,10 +1,17 @@
 import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { ProcessedWebhookEntity } from '../../../store/typeorm/processed-webhook.entity';
+import { WebhookQueueEntity } from '../../../store/typeorm/webhook-queue.entity';
 import { MonitorService } from '../monitor.service';
 import { MonitorModule } from '../monitor.module';
 import { FakeStoreModule } from '../../../test-utils/fake-store.module';
 import { StoreModule } from '../../../store/store.module';
+import { ExecutorService } from '../../../pipeline/executor/executor.service';
+import { DispatcherConfigModule } from '../../../config/dispatcher-config.module';
+import { makeDispatcherConfig } from '../../../test-utils/dispatcher-config';
 import { RoutingConfigService } from '../../../config/routing-config.service';
-import type { IStoreRepository, Run } from '../../../store/store.interfaces';
+import type { StoreRepository, Run } from '../../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../../store/store.interfaces';
 
 function makeRun(overrides: Partial<Run> = {}): Run {
   return {
@@ -24,7 +31,7 @@ function makeRun(overrides: Partial<Run> = {}): Run {
 }
 
 describe('MonitorService', () => {
-  let store: jest.Mocked<IStoreRepository>;
+  let store: jest.Mocked<StoreRepository>;
   let routingConfig: jest.Mocked<RoutingConfigService>;
   let service: MonitorService;
 
@@ -33,7 +40,7 @@ describe('MonitorService', () => {
       getRunStats: jest.fn(),
       listRunsByStatus: jest.fn(),
       listRuns: jest.fn(),
-    } as unknown as jest.Mocked<IStoreRepository>;
+    } as unknown as jest.Mocked<StoreRepository>;
     routingConfig = {
       getAllRepositories: jest.fn().mockReturnValue([
         {
@@ -45,13 +52,24 @@ describe('MonitorService', () => {
       ]),
     } as unknown as jest.Mocked<RoutingConfigService>;
 
-    const module = await Test.createTestingModule({ imports: [MonitorModule] })
+    const module = await Test.createTestingModule({
+      imports: [MonitorModule, DispatcherConfigModule],
+    })
       .overrideModule(StoreModule)
       .useModule(FakeStoreModule)
-      .overrideProvider('IStoreRepository')
+      .overrideProvider(STORE_REPOSITORY)
       .useValue(store)
       .overrideProvider(RoutingConfigService)
       .useValue(routingConfig)
+      .overrideProvider('DispatcherConfig')
+      .useValue(makeDispatcherConfig())
+      .overrideProvider(ExecutorService)
+      .useValue({})
+      // MonitorModule imports RelayModule for the scanner, which wires these repositories.
+      .overrideProvider(getRepositoryToken(WebhookQueueEntity))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(ProcessedWebhookEntity))
+      .useValue({})
       .compile();
 
     service = module.get(MonitorService);
@@ -76,7 +94,7 @@ describe('MonitorService', () => {
     it('lists every configured repo, even ones with no running runs', async () => {
       store.getRunStats.mockResolvedValue({
         lastWebhookAt: new Date(),
-        byStatus: { pending: 1, running: 2, succeeded: 5, failed: 1, needs_input: 3 },
+        byStatus: { pending: 1, running: 2, succeeded: 5, failed: 1, needs_input: 3, cancelled: 0 },
       });
       store.listRunsByStatus.mockResolvedValue([]);
 

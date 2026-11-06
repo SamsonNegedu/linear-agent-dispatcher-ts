@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24.0.0",
+    "node": ">=26.0.0",
     "pnpm": ">=9.0.0"
   },
   "scripts": {
@@ -19,13 +19,14 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "dev:up": "node scripts/dev-up.mjs"
+    "dev:up": "node scripts/dev-up.mjs",
+    "doctor": "node scripts/doctor.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.19.2",
-    "oxfmt": "^0.72.0",
-    "oxlint": "^1.88.0",
-    "oxlint-tsgolint": "^7.0.2004",
-    "typescript": "^5.7.0"
+    "@types/node": "26.6.6",
+    "oxfmt": "0.77.0",
+    "oxlint": "1.92.0",
+    "oxlint-tsgolint": "7.0.2006",
+    "typescript": "7.0.2"
   }
 }

@@ -9,12 +9,13 @@ Read these to understand _why the system looks the way it does_.
 
 - **[ADR 0001: Relay Service Architecture](0001-relay-service-architecture.md)** — Why a dedicated relay exists at all (OAuth gateway, subscriber registry), how it runs locally on NestJS/Fastify + SQLite, and why the original AWS design was removed.
 - **[ADR 0002: OAuth and Subscriber Registration](0002-oauth-and-subscriber-registration.md)** — How a dispatcher connects: two-stage OAuth flow, HMAC signing.
-- **[ADR 0003: Webhook Routing and Delivery](0003-webhook-routing-and-delivery.md)** — Relay → dispatcher delivery mechanics: synchronous, fire-and-forget, no retry.
+- **[ADR 0003: Webhook Routing and Delivery](0003-webhook-routing-and-delivery.md)** — Relay → dispatcher delivery mechanics: answer Linear first, deliver in the background, no retry.
 - **[ADR 0004: Webhook Dispatch — Trigger Semantics and Repository Routing](0004-dispatch-trigger-and-repo-routing.md)** — Whether a webhook should trigger a dispatch at all (the rule that stops the dispatcher's own comments from re-triggering itself), and if so, which repo + skill it routes to, the `routing.config.json` format (repos + exposed skills) and policy block, and startup preflight checks.
 - **[ADR 0005: Deterministic Subscriber Identity](0005-deterministic-subscriber-identity.md)** — Why a subscriber's ID excludes its delivery endpoint, and the duplicate-delivery bug that happens if it doesn't.
 - **[ADR 0006: Dispatcher Run Reliability](0006-dispatcher-run-reliability.md)** — What happens on failure, timeout, crash, a denied permission, or a question once a run is enqueued.
 - **[ADR 0007: Persisted Webhook Queue](0007-persisted-webhook-queue.md)** — How the dispatcher stores incoming deliveries, removes duplicates, drains them one at a time, and recovers after a restart.
 - **[ADR 0008: One-Command Local Startup](0008-one-command-local-startup.md)** — What `pnpm dev:up` starts, in what order, how the public tunnel is chosen, and where credentials are saved.
+- **[ADR 0009: Provider-Agnostic Dispatch and Reporting](0009-provider-agnostic-dispatch.md)** — The ports and registries (ingest, routing, issue context, run reporting) that let another tracker plug in beside Linear, and what is still Linear-shaped.
 
 That's the whole set, small enough to read start to finish for onboarding.
 
@@ -58,3 +59,5 @@ When adding a new feature or changing an existing decision:
 | Should a webhook dispatch at all, and which repo/skill does it route to? | [0004](0004-dispatch-trigger-and-repo-routing.md) |
 | Why doesn't re-registering create a duplicate?                           | [0005](0005-deterministic-subscriber-identity.md) |
 | What happens if a run fails, hangs, crashes, or needs to ask something?  | [0006](0006-dispatcher-run-reliability.md)        |
+| How does a second tracker plug in beside Linear?                         | [0009](0009-provider-agnostic-dispatch.md)        |
+| How do labelled issues get picked up without a webhook?                  | [0010](0010-label-scanner.md)                     |

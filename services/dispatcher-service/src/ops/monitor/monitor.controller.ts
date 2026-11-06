@@ -5,17 +5,39 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Param,
+  Post,
   Query,
 } from '@nestjs/common';
 import type { Run } from '../../store/store.interfaces';
 import { MonitorService, type MonitorSummary } from './monitor.service';
+import { ScannerService } from '../../pipeline/scanner/scanner.service';
+import type { ScannerReport } from '../../pipeline/scanner/scanner-report';
+import { ExecutorService } from '../../pipeline/executor/executor.service';
 import { errorMessage } from '../../common/error-message';
 
 @Controller('monitor')
 export class MonitorController {
   private readonly logger = new Logger(MonitorController.name);
 
-  constructor(private readonly monitorService: MonitorService) {}
+  constructor(
+    private readonly monitorService: MonitorService,
+    private readonly executor: ExecutorService,
+    private readonly scanner: ScannerService,
+  ) {}
+
+  @Post('runs/:id/cancel')
+  @HttpCode(202)
+  async cancel(@Param('id') id: string): Promise<{ id: string; status: 'cancelling' }> {
+    const outcome = await this.executor.cancelRun(id);
+    if (outcome === 'not_found') {
+      throw new HttpException({ error: 'Run not found' }, HttpStatus.NOT_FOUND);
+    }
+    if (outcome === 'not_running') {
+      throw new HttpException({ error: 'Run is not running' }, HttpStatus.CONFLICT);
+    }
+    return { id, status: 'cancelling' };
+  }
 
   @Get('summary')
   @HttpCode(200)
@@ -29,6 +51,12 @@ export class MonitorController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Get('scanner')
+  @HttpCode(200)
+  scannerReport(): ScannerReport {
+    return this.scanner.getReport();
   }
 
   @Get('runs')
@@ -45,6 +73,7 @@ export class MonitorController {
         'succeeded',
         'failed',
         'needs_input',
+        'cancelled',
       ];
 
       if (status && !validStatuses.includes(status)) {

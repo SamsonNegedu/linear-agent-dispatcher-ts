@@ -1,8 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { signWebhookPayload } from '@webhook-verify/core/relay';
 import { AdapterRegistry } from '@webhook-verify/core';
 import { SubscriberService } from '../subscriber/subscriber.service';
-import { WebhookDeliveryService } from './webhook-delivery.service';
+import { WebhookForwarder } from './webhook-forwarder.service';
 import type { NormalizedEvent, RoutingResolver } from '@webhook-verify/core';
 
 export interface WebhookFanOutResult {
@@ -20,7 +19,7 @@ export class WebhookService {
 
   constructor(
     private readonly subscriberService: SubscriberService,
-    private readonly deliveryService: WebhookDeliveryService,
+    private readonly forwarder: WebhookForwarder,
     @Inject('RoutingResolverRegistry')
     private readonly routingResolverRegistry: AdapterRegistry<RoutingResolver>,
   ) {}
@@ -78,14 +77,7 @@ export class WebhookService {
     // Fan out to each subscriber in parallel
     const deliveryResults = await Promise.all(
       subscribers.map((subscriber) =>
-        this.deliverToSubscriber(
-          subscriber.subscriberId,
-          subscriber.localEndpoint,
-          subscriber.subscriberSecret,
-          rawPayload,
-          webhook,
-          teamKey,
-        ),
+        this.forwarder.forward(subscriber, rawPayload, webhook, teamKey),
       ),
     );
 
@@ -111,74 +103,5 @@ export class WebhookService {
       delivered: successful,
       failed: failures.length,
     };
-  }
-
-  private async deliverToSubscriber(
-    subscriberId: string,
-    endpoint: string,
-    secret: string,
-    payload: string,
-    webhook: NormalizedEvent,
-    teamKey: string,
-  ): Promise<{ subscriberId: string; endpoint: string; success: boolean; reason?: string }> {
-    const signature = signWebhookPayload(payload, secret);
-    const deliveryId = await this.deliveryService.logAttempt(
-      subscriberId,
-      teamKey,
-      webhook.webhookId,
-      webhook.issueId,
-      webhook.issueIdentifier,
-      webhook.ownerId,
-    );
-
-    const startTime = Date.now();
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Relay-Signature': signature,
-        },
-        body: payload,
-        signal: AbortSignal.timeout(5000),
-      });
-
-      const responseTime = Date.now() - startTime;
-      const status = response.ok ? ('success' as const) : ('verification_failed' as const);
-
-      await this.deliveryService.logResult(deliveryId, status, responseTime);
-
-      if (!response.ok) {
-        return {
-          subscriberId,
-          endpoint,
-          success: false,
-          reason: `HTTP ${response.status}`,
-        };
-      }
-
-      // Mark subscriber as recently active (for stale cleanup)
-      await this.subscriberService.markWebhookDelivered(subscriberId).catch((error) => {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`Failed to mark webhook delivered for ${subscriberId}: ${errorMsg}`);
-      });
-
-      return { subscriberId, endpoint, success: true };
-    } catch (error) {
-      const responseTime = Date.now() - startTime;
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      const status = errorMsg.includes('timeout') ? ('timeout' as const) : ('unreachable' as const);
-
-      await this.deliveryService
-        .logResult(deliveryId, status, responseTime, errorMsg)
-        .catch((logErr) => {
-          const logErrorMsg = logErr instanceof Error ? logErr.message : 'Unknown error';
-          this.logger.error(
-            `webhook.delivery.log_error subscriberId=${subscriberId} reason="${logErrorMsg}"`,
-          );
-        });
-
-      return { subscriberId, endpoint, success: false, reason: errorMsg };
-    }
   }
 }

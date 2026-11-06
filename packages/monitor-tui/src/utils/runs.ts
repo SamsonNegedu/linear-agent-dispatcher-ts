@@ -5,7 +5,7 @@ import { formatTime } from './format';
 
 export type RunFilter = 'all' | 'active' | 'needs_input' | 'failed' | 'done';
 
-export const RUN_FILTERS: readonly RunFilter[] = ['all', 'active', 'needs_input', 'failed', 'done'];
+const RUN_FILTERS: readonly RunFilter[] = ['all', 'active', 'needs_input', 'failed', 'done'];
 
 export const FILTER_LABEL: Record<RunFilter, string> = {
   all: 'All',
@@ -21,6 +21,7 @@ export const STATUS_LABEL: Record<RunStatus, string> = {
   needs_input: 'INPUT',
   failed: 'FAILED',
   succeeded: 'DONE',
+  cancelled: 'STOPPED',
 };
 
 const FILTER_STATUSES: Record<RunFilter, readonly RunStatus[] | null> = {
@@ -28,7 +29,7 @@ const FILTER_STATUSES: Record<RunFilter, readonly RunStatus[] | null> = {
   active: ['running', 'pending'],
   needs_input: ['needs_input'],
   failed: ['failed'],
-  done: ['succeeded'],
+  done: ['succeeded', 'cancelled'],
 };
 
 /** Every run in the snapshot, most urgent first: running, queued, needs input, failed, done. */
@@ -76,6 +77,7 @@ export const runDetailText = (run: Run, now: number): string =>
     `Repo:    ${run.domainLabel} (${run.repoPath})`,
     `Skill:   /${run.skill}`,
     `Run ID:  ${run.id}`,
+    ...(run.triggerSource === 'scan' ? ['Source:  scanner'] : []),
     `Started: ${new Date(run.startedAt).toLocaleString()}`,
     `${run.finishedAt ? 'Took:   ' : 'Running:'} ${formatTime(runDuration(run, now))}`,
     ...(run.errorSnippet ? ['', `${reasonLabel(run.status)}:`, run.errorSnippet] : []),

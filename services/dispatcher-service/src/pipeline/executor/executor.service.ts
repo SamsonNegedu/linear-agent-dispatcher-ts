@@ -1,8 +1,9 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import type { IStoreRepository } from '../../store/store.interfaces';
-import type { NormalizedEvent } from '@webhook-verify/core';
+import type { StoreRepository } from '../../store/store.interfaces';
+import { STORE_REPOSITORY } from '../../store/store.interfaces';
+import type { AdapterRegistry, NormalizedEvent } from '@webhook-verify/core';
 import { ClaudeAgentService } from './claude-agent.service';
-import { RunFeedbackService } from './run-feedback.service';
+import { RUN_REPORTER_REGISTRY, type RunReporter } from './run-reporter';
 import { errorMessage } from '../../common/error-message';
 
 @Injectable()
@@ -10,10 +11,18 @@ export class ExecutorService {
   private readonly logger = new Logger(ExecutorService.name);
 
   constructor(
-    @Inject('IStoreRepository') private readonly store: IStoreRepository,
+    @Inject(STORE_REPOSITORY) private readonly store: StoreRepository,
     private readonly claudeAgent: ClaudeAgentService,
-    private readonly feedback: RunFeedbackService,
+    @Inject(RUN_REPORTER_REGISTRY) private readonly reporters: AdapterRegistry<RunReporter>,
   ) {}
+
+  /** Stops a running run. The run is marked cancelled once its process exits (see executeRun). */
+  async cancelRun(runId: string): Promise<'cancelling' | 'not_found' | 'not_running'> {
+    const run = await this.store.getRun(runId);
+    if (!run) return 'not_found';
+    if (run.status !== 'running' || !this.claudeAgent.cancel(runId)) return 'not_running';
+    return 'cancelling';
+  }
 
   async executeRun(runId: string, event: NormalizedEvent): Promise<void> {
     const run = await this.store.getRun(runId);
@@ -22,6 +31,7 @@ export class ExecutorService {
       return;
     }
 
+    const feedback = this.reporters.getOrThrow(event.provider);
     const target = { issueId: run.issueId, sessionId: run.providerSessionId };
 
     try {
@@ -29,7 +39,7 @@ export class ExecutorService {
       await this.store.markRunning(runId);
       this.logger.log(`Executing run: ${runId} in repo: ${run.repoPath}`);
 
-      await this.feedback.started(target, {
+      await feedback.started(target, {
         repoLabel: run.domainLabel,
         skill: run.skill,
         runId,
@@ -38,6 +48,7 @@ export class ExecutorService {
 
       const result = await this.claudeAgent.spawn(run.skill, event.issueIdentifier, run.repoPath, {
         resumeSessionId: run.claudeSessionId,
+        runId,
       });
 
       // Mark complete
@@ -50,6 +61,8 @@ export class ExecutorService {
 
       if (result.status === 'succeeded') {
         this.logger.log(`Run completed: ${runId} (${result.status})`);
+      } else if (result.status === 'cancelled') {
+        this.logger.warn(`Run cancelled: ${runId}`);
       } else if (result.status === 'needs_input') {
         this.logger.warn(`[NEEDS_ATTENTION] Run stopped to ask: ${runId} - ${result.errorSnippet}`);
       } else {
@@ -61,11 +74,13 @@ export class ExecutorService {
         result.resultText ||
         `Claude skill \`/${run.skill}\` completed successfully in \`${run.domainLabel}\` repo`;
       if (result.status === 'succeeded') {
-        await this.feedback.succeeded(target, summary);
+        await feedback.succeeded(target, summary);
+      } else if (result.status === 'cancelled') {
+        await feedback.cancelled(target);
       } else if (result.status === 'needs_input') {
-        await this.feedback.needsInput(target, summary);
+        await feedback.needsInput(target, summary);
       } else {
-        await this.feedback.failed(
+        await feedback.failed(
           target,
           result.errorSnippet || `Run failed with exit code ${result.exitCode}`,
         );
@@ -78,7 +93,7 @@ export class ExecutorService {
         errorSnippet: errorMsg,
       });
 
-      await this.feedback.failed(target, errorMsg);
+      await feedback.failed(target, errorMsg);
     }
   }
 }

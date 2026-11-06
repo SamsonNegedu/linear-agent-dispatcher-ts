@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { statusColor } from '../theme';
 import { useTheme } from '../theme-context';
-import type { MonitorSnapshot } from '../services/monitor-api.service';
+import { cancelRun, type MonitorSnapshot } from '../services/monitor-api.service';
 import { useNow } from '../hooks/useClock';
 import { ago, columnWidths, fit, formatTime } from '../utils/format';
 import {
@@ -36,6 +36,9 @@ export function RunsView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const offset = useRef(0);
+  // Stopping a run needs a second keypress: `x` asks, `x` again confirms, esc backs out.
+  const [stop, setStop] = useState<{ id: string; phase: 'confirm' | 'sending' } | null>(null);
+  const [stopNote, setStopNote] = useState<string | null>(null);
 
   const runs = allRuns(snapshot);
   const counts = filterCounts(runs);
@@ -54,11 +57,13 @@ export function RunsView({
       ? 7 +
         lines(selected.issueTitle || '(no title)') -
         1 +
+        (selected.triggerSource === 'scan' ? 1 : 0) +
         (selected.errorSnippet ? 2 + lines(selected.errorSnippet) : 0)
       : 0;
 
   // chips(1) + panel borders(2) + column header(1)
-  const listRows = Math.max(1, height - APP_ROWS - 4 - detailRows);
+  const noteRows = stop || stopNote ? 1 : 0;
+  const listRows = Math.max(1, height - APP_ROWS - 4 - detailRows - noteRows);
   if (index < offset.current) offset.current = index;
   else if (index >= offset.current + listRows) offset.current = index - listRows + 1;
   offset.current = Math.max(0, Math.min(offset.current, Math.max(0, visible.length - listRows)));
@@ -82,6 +87,28 @@ export function RunsView({
 
   useKeyboard((key) => {
     if (key.ctrl || key.meta) return;
+    if (key.name !== 'x') setStopNote(null);
+    if (key.name === 'x') {
+      if (stop?.phase === 'sending') return;
+      if (stop && stop.id === selected?.id) {
+        setStop({ id: stop.id, phase: 'sending' });
+        void cancelRun(stop.id).then((error) => {
+          setStop(null);
+          setStopNote(error ?? 'Stop requested. The run ends once Claude exits.');
+        });
+      } else if (selected?.status === 'running') {
+        setStopNote(null);
+        setStop({ id: selected.id, phase: 'confirm' });
+      } else {
+        setStopNote('Only a running run can be stopped.');
+      }
+      return;
+    }
+    if (key.name === 'escape' && stop?.phase === 'confirm') {
+      setStop(null);
+      return;
+    }
+    if (stop?.phase === 'confirm' && key.name !== 'escape') setStop(null);
     if (key.name === 'down' || key.name === 'j') move(index + 1);
     else if (key.name === 'up' || key.name === 'k') move(index - 1);
     else if (key.name === 'pagedown') move(index + listRows);
@@ -111,6 +138,15 @@ export function RunsView({
     <box style={{ flexDirection: 'column', flexGrow: 1 }}>
       <Panel title={`Runs · filter: ${FILTER_LABEL[filter]}`} focused={!detailOpen}>
         <FilterChips counts={counts} active={filter} />
+        {stop || stopNote ? (
+          <text fg={stop ? colors.needs_input : colors.muted} wrapMode="none" truncate>
+            {stop?.phase === 'confirm'
+              ? `  Stop ${selected?.issueIdentifier || stop.id}? Press x again to confirm, any other key to keep it running.`
+              : stop?.phase === 'sending'
+                ? '  Stopping...'
+                : `  ${stopNote}`}
+          </text>
+        ) : null}
         <text fg={colors.muted} wrapMode="none" truncate>
           {'  '}
           {fit('STATUS', statusW)} {cell('REPO', repoW, showRepo)}
@@ -140,7 +176,10 @@ export function RunsView({
                   {cell(run.domainLabel, repoW, showRepo)}
                   <span attributes={1}>{fit(run.issueIdentifier || '—', issueW)}</span>
                   {'  '}
-                  {fit(run.issueTitle || '(no title)', titleW)}
+                  {fit(
+                    `${run.triggerSource === 'scan' ? '↻ ' : ''}${run.issueTitle || '(no title)'}`,
+                    titleW,
+                  )}
                   {'  '}
                   <span fg={colors.muted}>{cell(`/${run.skill}`, skillW, showSkill)}</span>
                   <span fg={run.status === 'running' ? colors.running : colors.muted}>
@@ -185,6 +224,11 @@ export function RunsView({
             <span fg={colors.muted}>{fit('Run ID', 9)}</span>
             {selected.id}
           </text>
+          {selected.triggerSource === 'scan' ? (
+            <text wrapMode="none" truncate>
+              <span fg={colors.muted}>{fit('Source', 9)}</span>↻ scanner
+            </text>
+          ) : null}
           <text wrapMode="none" truncate>
             <span fg={colors.muted}>{fit('Started', 9)}</span>
             {new Date(selected.startedAt).toLocaleString()}
